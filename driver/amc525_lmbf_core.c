@@ -11,6 +11,7 @@
 #include <linux/delay.h>
 
 #include "error.h"
+#include "amc525_lamc_pci_device.h"
 
 
 #define DEVICE_NAME     "amc525_lamc_priv"
@@ -61,8 +62,23 @@ static int lamc_pci_reg_map(struct file *file, struct vm_area_struct *vma)
 }
 
 
+static long lamc_pci_reg_ioctl(
+    struct file *file, unsigned int cmd, unsigned long arg)
+{
+    struct amc525_lamc_priv *lamc_priv = file->private_data;
+    switch (cmd)
+    {
+        case LAMC_MAP_SIZE:
+            return lamc_priv->reg_length;
+        default:
+            return -EINVAL;
+    }
+}
+
+
 static struct file_operations lamc_pci_reg_fops = {
     .owner = THIS_MODULE,
+    .unlocked_ioctl = lamc_pci_reg_ioctl,
     .mmap = lamc_pci_reg_map,
 };
 
