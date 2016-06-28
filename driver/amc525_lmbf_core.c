@@ -40,6 +40,7 @@ struct amc525_lamc_priv {
     struct cdev cdev;
     struct pci_dev *dev;
     int board;              // Index number for this board
+    int major;              // Major device number
     int minor;              // Associated minor number
 
     /* BAR0 memory mapped register region. */
@@ -251,6 +252,28 @@ static struct file_operations base_fops = {
 };
 
 
+static int create_device_nodes(
+    struct pci_dev *pdev, struct amc525_lamc_priv *lamc_priv, struct class *device_class)
+{
+    int major = lamc_priv->major;
+    int minor = lamc_priv->minor;
+
+    cdev_init(&lamc_priv->cdev, &base_fops);
+    lamc_priv->cdev.owner = THIS_MODULE;
+    int rc = cdev_add(&lamc_priv->cdev, MKDEV(major, minor), MINORS_PER_BOARD);
+    TEST_RC(rc, no_cdev, "Unable to add device");
+
+    for (int i = 0; i < MINORS_PER_BOARD; i ++)
+        device_create(
+            device_class, &pdev->dev, MKDEV(major, minor + i), NULL,
+            "%s.%d.%s", DEVICE_NAME, lamc_priv->board, fops_info[i].name);
+    return 0;
+
+no_cdev:
+    return rc;
+}
+
+
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 /* Device initialisation. */
@@ -371,6 +394,7 @@ static int amc525_lamc_pci_probe(
     TEST_PTR(lamc_priv, rc, no_memory, "Unable to allocate memory");
     lamc_priv->dev = pdev;
     lamc_priv->board = board;
+    lamc_priv->major = major;
     lamc_priv->minor = minor;
 
     rc = enable_board(pdev);
@@ -379,15 +403,8 @@ static int amc525_lamc_pci_probe(
     rc = initialise_board(pdev, lamc_priv);
     if (rc < 0)     goto no_initialise;
 
-    cdev_init(&lamc_priv->cdev, &base_fops);
-    lamc_priv->cdev.owner = THIS_MODULE;
-    rc = cdev_add(&lamc_priv->cdev, MKDEV(major, minor), MINORS_PER_BOARD);
-    TEST_RC(rc, no_cdev, "Unable to add device");
-
-    for (int i = 0; i < MINORS_PER_BOARD; i ++)
-        device_create(
-            device_class, &pdev->dev, MKDEV(major, minor + i), NULL,
-            "%s.%d.%s", DEVICE_NAME, board, fops_info[i].name);
+    rc = create_device_nodes(pdev, lamc_priv, device_class);
+    if (rc < 0)     goto no_cdev;
 
 
 //     rc = request_irq(
