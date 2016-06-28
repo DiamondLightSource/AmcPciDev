@@ -13,6 +13,8 @@
 #include "error.h"
 #include "amc525_lamc_pci_device.h"
 #include "dma_control.h"
+#include "memory.h"
+#include "debug.h"
 
 
 MODULE_AUTHOR("Michael Abbott, Diamond Light Source Ltd.");
@@ -21,18 +23,40 @@ MODULE_LICENSE("GPL");
 // MODULE_VERSION(S(VERSION));
 MODULE_VERSION("0");
 
+/* Card identification. */
 #define XILINX_VID      0x10EE
 #define AMC525_DID      0x7038
 
 
-#define DMA_BLOCK_SHIFT     20  // Default DMA block size as power of 2
+/* Physical layout in DDR address space of the two memory areas. */
+#define DDR0_BASE       0
+#define DDR0_LENGTH     0x80000000      // 2GB
+#define DDR1_BASE       0x80000000
+#define DDR1_LENGTH     0x08000000      // 128MB
 
-static int dma_block_shift = DMA_BLOCK_SHIFT;
-module_param(dma_block_shift, int, S_IRUGO);
+
+/* Expected length of BAR2. */
+#define BAR2_LENGTH     16384           // 4 separate IO pages
+
 
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 /* Structures. */
+
+
+/* Register space for AXI interrupt controller (Xilinx PG099). */
+struct axi_interrupt_controller {
+    uint32_t isr;               // 00 Interrupt status
+    uint32_t ipr;               // 04 Interrupt pending
+    uint32_t ier;               // 08 Interrupt enable
+    uint32_t iar;               // 0C Interrupt acknowledge
+    uint32_t sie;               // 10 Set interrupt enables
+    uint32_t cie;               // 14 Clear interrupt enables
+    uint32_t ivr;               // 18 Interrupt vector
+    uint32_t mer;               // 1C Master enable
+    uint32_t imr;               // 20 Intterupt mode
+    uint32_t ilr;               // 24 Interrupt level
+};
 
 
 /* All the driver specific state for a card is in this structure. */
@@ -47,107 +71,13 @@ struct amc525_lamc_priv {
     unsigned long reg_length;
     void __iomem *reg_memory;
 
+    /* BAR2 memory mapped region, used for driver control. */
+    void __iomem *ctrl_memory;
+
     /* DMA controller. */
     struct dma_control *dma;
-};
 
-
-/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
-/* Memory device. */
-
-/* This provides read access to the DRAM via the DMA controller with registers
- * in BAR2. */
-
-
-/* Physical layout in DDR address space of the two memory areas. */
-#define DDR0_BASE       0
-#define DDR0_LENGTH     0x80000000      // 2GB
-#define DDR1_BASE       0x80000000
-#define DDR1_LENGTH     0x08000000      // 128MB
-
-
-struct dma_context {
-    struct dma_control *dma;        // DMA controller
-    size_t base;
-    size_t length;
-};
-
-
-static int lamc_pci_dma_open(
-    struct file *file, struct amc525_lamc_priv *lamc_priv, size_t base, size_t length)
-{
-    int rc = 0;
-    struct dma_context *context =
-        kmalloc(sizeof(struct dma_context), GFP_KERNEL);
-    TEST_PTR(context, rc, no_context, "Unable to allocate DMA context");
-
-    *context = (struct dma_context) {
-        .dma = lamc_priv->dma,
-        .base = base,
-        .length = length,
-    };
-
-    file->private_data = context;
-    return 0;
-
-no_context:
-    return rc;
-}
-
-
-static int lamc_pci_dma_release(struct inode *inode, struct file *file)
-{
-    kfree(file->private_data);
-    return 0;
-}
-
-
-static ssize_t lamc_pci_dma_read(
-    struct file *file, char __user *buf, size_t count, loff_t *f_pos)
-{
-    printk(KERN_INFO "mem read: %zu %llu\n", count, *f_pos);
-
-    struct dma_context *context = file->private_data;
-
-    /* Constrain read to valid region. */
-    loff_t offset = *f_pos;
-    if (offset >= context->length)
-        return -EFAULT;
-
-    /* Clip read to buffer size and end of memory. */
-    size_t buffer_size = 1 << dma_block_shift;
-    if (count > buffer_size)
-        count = buffer_size;
-    if (count > context->length - offset)
-        count = context->length - offset;
-
-    /* Read the data, transfer it to user space, release. */
-    void *read_data = read_dma_memory(
-        context->dma, context->base + offset, count);
-    count -= copy_to_user(buf, read_data, count);
-    release_dma_memory(context->dma);
-
-    *f_pos += count;
-    if (count == 0)
-        /* Looks like copy_to_user didn't copy anything. */
-        return -EFAULT;
-    else
-        return count;
-}
-
-
-static loff_t lamc_pci_dma_llseek(struct file *file, loff_t f_pos, int whence)
-{
-    return generic_file_llseek_size(
-        file, f_pos, whence, DDR0_LENGTH, DDR0_LENGTH);
-}
-
-
-static struct file_operations lamc_pci_dma_fops = {
-    .owner = THIS_MODULE,
-    .release = lamc_pci_dma_release,
-    .read = lamc_pci_dma_read,
-    .llseek = lamc_pci_dma_llseek,
+    struct axi_interrupt_controller __iomem *intc;
 };
 
 
@@ -200,6 +130,66 @@ static struct file_operations lamc_pci_reg_fops = {
 
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+/* Interrupt handling. */
+
+
+static irqreturn_t lamc_pci_isr(int ireq, void *context)
+{
+    struct amc525_lamc_priv *lamc_priv = context;
+
+    /* Ask the interrupt controller for the active interrupts and acknowlege the
+     * ones we've seen. */
+    uint32_t isr = readl(&lamc_priv->intc->isr);
+    writel(isr, &lamc_priv->intc->iar);
+
+    printk(KERN_INFO "ISR %d (%p) received: %02x\n", ireq, lamc_priv, isr);
+
+    /* Interrupt number 1 belongs to the DMA engine. */
+    if (isr & 1)
+        dma_interrupt(lamc_priv->dma);
+
+    return IRQ_HANDLED;
+}
+
+
+static int initialise_interrupts(struct amc525_lamc_priv *lamc_priv)
+{
+    int rc = 0;
+
+    /* Assign interrupt controller space at offset 2000. */
+    lamc_priv->intc = lamc_priv->ctrl_memory + 0x2000;
+
+    /* Start with the interrupt controller disabled while we internally enable
+     * everything and clear any acknowleges. */
+    writel(0, &lamc_priv->intc->mer);            // Disable controller
+    writel(0xFFFFFFFF, &lamc_priv->intc->iar);   // Ensure no pending interrupts
+    writel(0xFFFFFFFF, &lamc_priv->intc->ier);   // Enable all interrupts
+
+    rc = request_irq(lamc_priv->dev->irq, lamc_pci_isr, 0, DEVICE_NAME, lamc_priv);
+    TEST_RC(rc, no_irq, "Unable to request irq");
+
+    /* This should put the controller in normal operating mode. */
+    writel(3, &lamc_priv->intc->mer);
+
+    printk(KERN_INFO "Interrupt controller:\n");
+    dump_binary(lamc_priv->intc, sizeof(*lamc_priv->intc));
+
+    return 0;
+
+    free_irq(lamc_priv->dev->irq, lamc_priv);
+no_irq:
+    return rc;
+}
+
+
+static void terminate_interrupts(struct amc525_lamc_priv *lamc_priv)
+{
+    free_irq(lamc_priv->dev->irq, lamc_priv);
+    printk(KERN_INFO "free_irq returned\n");
+}
+
+
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 /* Basic file operations. */
 
 static struct {
@@ -235,9 +225,9 @@ static int amc525_lamc_pci_open(struct inode *inode, struct file *file)
             file->private_data = lamc_priv;
             return 0;
         case MINOR_DDR0:
-            return lamc_pci_dma_open(file, lamc_priv, DDR0_BASE, DDR0_LENGTH);
+            return lamc_pci_dma_open(file, lamc_priv->dma, DDR0_BASE, DDR0_LENGTH);
         case MINOR_DDR1:
-            return lamc_pci_dma_open(file, lamc_priv, DDR1_BASE, DDR1_LENGTH);
+            return lamc_pci_dma_open(file, lamc_priv->dma, DDR1_BASE, DDR1_LENGTH);
         default:
             /* No idea how this could happen, to be honest. */
             return -EINVAL;
@@ -324,8 +314,14 @@ static int enable_board(struct pci_dev *pdev)
 
     pci_set_master(pdev);
 
+    rc = pci_enable_msi(pdev);
+    TEST_RC(rc, no_msi, "Unable to enable MSI");
+
     return 0;
 
+    pci_disable_msi(pdev);
+no_msi:
+    pci_clear_master(pdev);
 no_dma_mask:
     pci_release_regions(pdev);
 no_regions:
@@ -337,6 +333,7 @@ no_device:
 
 static void disable_board(struct pci_dev *pdev)
 {
+    pci_disable_msi(pdev);
     pci_clear_master(pdev);
     pci_release_regions(pdev);
     pci_disable_device(pdev);
@@ -351,9 +348,16 @@ static int initialise_board(struct pci_dev *pdev, struct amc525_lamc_priv *lamc_
     /* Map the register bar. */
     lamc_priv->reg_length = pci_resource_len(pdev, 0);
     lamc_priv->reg_memory = pci_iomap(pdev, 0, lamc_priv->reg_length);
-    TEST_PTR(lamc_priv->reg_memory, rc, no_memory, "Unable to map register bar");
+    TEST_PTR(lamc_priv->reg_memory, rc, no_memory, "Unable to map register BAR");
 
-    rc = initialise_dma_control(pdev, dma_block_shift, &lamc_priv->dma);
+    /* Map the control area bar. */
+    int bar2_length = pci_resource_len(pdev, 2);
+    TEST_OK(bar2_length >= BAR2_LENGTH, rc = -EINVAL, no_bar2,
+        "Invalid length for bar2");
+    lamc_priv->ctrl_memory = pci_iomap(pdev, 2, BAR2_LENGTH);
+    TEST_PTR(lamc_priv->ctrl_memory, rc, no_bar2, "Unable to map control BAR");
+
+    rc = initialise_dma_control(pdev, lamc_priv->ctrl_memory, &lamc_priv->dma);
     if (rc < 0)  goto no_dma;
 
     return 0;
@@ -361,6 +365,8 @@ static int initialise_board(struct pci_dev *pdev, struct amc525_lamc_priv *lamc_
 
     terminate_dma_control(lamc_priv->dma);
 no_dma:
+    pci_iounmap(pdev, lamc_priv->ctrl_memory);
+no_bar2:
     pci_iounmap(pdev, lamc_priv->reg_memory);
 no_memory:
     return rc;
@@ -372,6 +378,7 @@ static void terminate_board(struct pci_dev *pdev)
     struct amc525_lamc_priv *lamc_priv = pci_get_drvdata(pdev);
 
     terminate_dma_control(lamc_priv->dma);
+    pci_iounmap(pdev, lamc_priv->ctrl_memory);
     pci_iounmap(pdev, lamc_priv->reg_memory);
 }
 
@@ -406,14 +413,13 @@ static int amc525_lamc_pci_probe(
     rc = create_device_nodes(pdev, lamc_priv, device_class);
     if (rc < 0)     goto no_cdev;
 
-
-//     rc = request_irq(
-//         pdev->irq, fa_sniffer_isr, IRQF_SHARED, DEVICE_NAME, open);
-//     TEST_RC(rc, no_irq, "Unable to request irq");
+    rc = initialise_interrupts(lamc_priv);
+    if (rc < 0)     goto no_irq;
 
     return 0;
 
 
+no_irq:
     cdev_del(&lamc_priv->cdev);
 no_cdev:
     terminate_board(pdev);
@@ -433,6 +439,8 @@ static void amc525_lamc_pci_remove(struct pci_dev *pdev)
     printk(KERN_INFO "Removing AMC525 device\n");
     struct amc525_lamc_priv *lamc_priv = pci_get_drvdata(pdev);
     int major = MAJOR(device_major);
+
+    terminate_interrupts(lamc_priv);
 
     for (int i = 0; i < MINORS_PER_BOARD; i ++)
         device_destroy(device_class, MKDEV(major, lamc_priv->minor + i));
