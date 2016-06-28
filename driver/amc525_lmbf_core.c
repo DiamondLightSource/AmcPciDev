@@ -142,7 +142,7 @@ static irqreturn_t lamc_pci_isr(int ireq, void *context)
     uint32_t isr = readl(&lamc_priv->intc->isr);
     writel(isr, &lamc_priv->intc->iar);
 
-    printk(KERN_INFO "ISR %d (%p) received: %02x\n", ireq, lamc_priv, isr);
+    printk(KERN_INFO "ISR %d received: %02x\n", ireq, isr);
 
     /* Interrupt number 1 belongs to the DMA engine. */
     if (isr & 1)
@@ -168,11 +168,8 @@ static int initialise_interrupts(struct amc525_lamc_priv *lamc_priv)
     rc = request_irq(lamc_priv->dev->irq, lamc_pci_isr, 0, DEVICE_NAME, lamc_priv);
     TEST_RC(rc, no_irq, "Unable to request irq");
 
-    /* This should put the controller in normal operating mode. */
+    /* Put the controller in normal operating mode. */
     writel(3, &lamc_priv->intc->mer);
-
-    printk(KERN_INFO "Interrupt controller:\n");
-    dump_binary(lamc_priv->intc, sizeof(*lamc_priv->intc));
 
     return 0;
 
@@ -184,8 +181,8 @@ no_irq:
 
 static void terminate_interrupts(struct amc525_lamc_priv *lamc_priv)
 {
+    writel(0, &lamc_priv->intc->mer);            // Disable controller
     free_irq(lamc_priv->dev->irq, lamc_priv);
-    printk(KERN_INFO "free_irq returned\n");
 }
 
 
