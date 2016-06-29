@@ -103,7 +103,7 @@ static int amc525_lamc_pci_open(struct inode *inode, struct file *file)
     switch (minor_index)
     {
         case MINOR_REG:
-            return lamc_pci_reg_open(file, lamc_priv->dev);
+            return lamc_pci_reg_open(file, lamc_priv->dev, lamc_priv->interrupts);
         case MINOR_DDR0:
             return lamc_pci_dma_open(file, lamc_priv->dma, DDR0_BASE, DDR0_LENGTH);
         case MINOR_DDR1:
@@ -256,7 +256,7 @@ static int initialise_board(struct pci_dev *pdev, struct amc525_lamc_priv *lamc_
     return 0;
 
 
-    terminate_interrupt_control(lamc_priv->interrupts);
+    terminate_interrupt_control(pdev, lamc_priv->interrupts);
 no_irq:
     terminate_dma_control(lamc_priv->dma);
 no_dma:
@@ -269,7 +269,7 @@ no_bar2:
 static void terminate_board(struct pci_dev *pdev)
 {
     struct amc525_lamc_priv *lamc_priv = pci_get_drvdata(pdev);
-    terminate_interrupt_control(lamc_priv->interrupts);
+    terminate_interrupt_control(pdev, lamc_priv->interrupts);
     terminate_dma_control(lamc_priv->dma);
     pci_iounmap(pdev, lamc_priv->ctrl_memory);
 }
