@@ -6,6 +6,7 @@
 #include <linux/fs.h>
 
 #include "error.h"
+#include "amc525_lamc_pci_device.h"
 #include "dma_control.h"
 
 #include "memory.h"
@@ -91,9 +92,24 @@ static loff_t lamc_pci_dma_llseek(struct file *file, loff_t f_pos, int whence)
 }
 
 
+static long lamc_pci_mem_ioctl(
+    struct file *file, unsigned int cmd, unsigned long arg)
+{
+    struct memory_context *context = file->private_data;
+    switch (cmd)
+    {
+        case LAMC_BUF_SIZE:
+            return dma_buffer_size(context->dma);
+        default:
+            return -EINVAL;
+    }
+}
+
+
 struct file_operations lamc_pci_dma_fops = {
     .owner = THIS_MODULE,
     .release = lamc_pci_dma_release,
     .read = lamc_pci_dma_read,
     .llseek = lamc_pci_dma_llseek,
+    .unlocked_ioctl = lamc_pci_mem_ioctl,
 };
