@@ -4,6 +4,7 @@
 #include <linux/slab.h>
 #include <linux/uaccess.h>
 #include <linux/fs.h>
+#include <linux/pci.h>
 
 #include "error.h"
 #include "amc525_lamc_pci_device.h"
