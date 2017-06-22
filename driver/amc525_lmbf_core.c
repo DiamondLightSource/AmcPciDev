@@ -82,6 +82,9 @@ struct amc525_lamc_priv {
     /* BAR2 memory mapped region, used for driver control. */
     void __iomem *ctrl_memory;
 
+    /* Locking control for exclusive access to ctrl_memory. */
+    struct register_locking locking;
+
     /* DMA controller. */
     struct dma_control *dma;
 
@@ -123,7 +126,8 @@ static int amc525_lamc_pci_open(struct inode *inode, struct file *file)
     switch (minor_index)
     {
         case MINOR_REG:
-            return lamc_pci_reg_open(file, lamc_priv->dev, lamc_priv->interrupts);
+            return lamc_pci_reg_open(
+                file, lamc_priv->dev, lamc_priv->interrupts, &lamc_priv->locking);
         case MINOR_DDR0:
             return lamc_pci_dma_open(file, lamc_priv->dma, DDR0_BASE, DDR0_LENGTH);
         case MINOR_DDR1:
@@ -317,6 +321,7 @@ static int amc525_lamc_pci_probe(
     lamc_priv->board = board;
     lamc_priv->major = major;
     lamc_priv->minor = minor;
+    mutex_init(&lamc_priv->locking.mutex);
 
     rc = enable_board(pdev);
     if (rc < 0)     goto no_enable;
