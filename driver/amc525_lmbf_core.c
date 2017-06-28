@@ -357,8 +357,8 @@ static void amc525_lamc_pci_remove(struct pci_dev *pdev)
     destroy_device_nodes(lamc_priv, device_class);
     terminate_board(pdev);
     disable_board(pdev);
-    kfree(lamc_priv);
     release_board(lamc_priv->board);
+    kfree(lamc_priv);
 }
 
 
