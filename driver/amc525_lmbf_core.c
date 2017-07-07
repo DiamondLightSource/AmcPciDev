@@ -317,10 +317,12 @@ static int amc525_lamc_pci_probe(
     /* Allocate state for our board. */
     struct amc525_lamc_priv *lamc_priv = kmalloc(sizeof(struct amc525_lamc_priv), GFP_KERNEL);
     TEST_PTR(lamc_priv, rc, no_memory, "Unable to allocate memory");
-    lamc_priv->dev = pdev;
-    lamc_priv->board = board;
-    lamc_priv->major = major;
-    lamc_priv->minor = minor;
+    *lamc_priv = (struct amc525_lamc_priv) {
+        .dev = pdev,
+        .board = board,
+        .major = major,
+        .minor = minor,
+    };
     mutex_init(&lamc_priv->locking.mutex);
 
     rc = enable_board(pdev);
