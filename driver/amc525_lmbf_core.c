@@ -11,6 +11,7 @@
 #include <linux/delay.h>
 
 #include "error.h"
+#include "amc525_lamc_pci_core.h"
 #include "amc525_lamc_pci_device.h"
 #include "dma_control.h"
 #include "interrupts.h"
@@ -79,6 +80,11 @@ struct amc525_lamc_priv {
     int major;              // Major device number
     int minor;              // Associated minor number
 
+    /* Reference counting and completion to cope with lifetime management during
+     * FPGA reload events. */
+    atomic_t refcount;              // Number of file handles open (+1)
+    struct completion completion;   // Used to handshake final device close
+
     /* BAR2 memory mapped region, used for driver control. */
     void __iomem *ctrl_memory;
 
@@ -112,6 +118,16 @@ static struct {
 #define MINOR_DDR1      2
 
 
+/* This must be called whenever any Lfile handle is released. */
+void amc525_lamc_pci_release(struct inode *inode)
+{
+    struct cdev *cdev = inode->i_cdev;
+    struct amc525_lamc_priv *lamc_priv = container_of(cdev, struct amc525_lamc_priv, cdev);
+    if (atomic_dec_and_test(&lamc_priv->refcount))
+        complete(&lamc_priv->completion);
+}
+
+
 static int amc525_lamc_pci_open(struct inode *inode, struct file *file)
 {
     /* Recover our private data: the i_cdev lives inside our private structure,
@@ -119,24 +135,32 @@ static int amc525_lamc_pci_open(struct inode *inode, struct file *file)
     struct cdev *cdev = inode->i_cdev;
     struct amc525_lamc_priv *lamc_priv = container_of(cdev, struct amc525_lamc_priv, cdev);
 
+    /* Check that the file handle is still live. */
+    if (!atomic_inc_not_zero(&lamc_priv->refcount))
+        return -ENXIO;
+
     /* Replace the file's f_ops with our own and perform any device specific
      * initialisation. */
     int minor_index = iminor(inode) - lamc_priv->minor;
     file->f_op = fops_info[minor_index].fops;
+    int rc = -EINVAL;
     switch (minor_index)
     {
         case MINOR_REG:
-            return lamc_pci_reg_open(
+            rc = lamc_pci_reg_open(
                 file, lamc_priv->dev, lamc_priv->interrupts, &lamc_priv->locking);
+            break;
         case MINOR_DDR0:
-            return lamc_pci_dma_open(file, lamc_priv->dma, DDR0_BASE, DDR0_LENGTH);
+            rc = lamc_pci_dma_open(file, lamc_priv->dma, DDR0_BASE, DDR0_LENGTH);
+            break;
         case MINOR_DDR1:
-            return lamc_pci_dma_open(file, lamc_priv->dma, DDR1_BASE, DDR1_LENGTH);
-        default:
-            /* No idea how this could happen, to be honest. */
-            return -EINVAL;
+            rc = lamc_pci_dma_open(file, lamc_priv->dma, DDR1_BASE, DDR1_LENGTH);
+            break;
     }
-    return 0;
+
+    if (rc < 0)
+        amc525_lamc_pci_release(inode);
+    return rc;
 }
 
 
@@ -324,6 +348,8 @@ static int amc525_lamc_pci_probe(
         .minor = minor,
     };
     mutex_init(&lamc_priv->locking.mutex);
+    atomic_set(&lamc_priv->refcount, 1);
+    init_completion(&lamc_priv->completion);
 
     rc = enable_board(pdev);
     if (rc < 0)     goto no_enable;
@@ -351,15 +377,28 @@ no_board:
 }
 
 
+/* Waits for all open file handles to be released so that we can safely release
+ * the hardware resources. */
+static void wait_for_clients(struct amc525_lamc_priv *lamc_priv)
+{
+    if (atomic_dec_and_test(&lamc_priv->refcount))
+        complete(&lamc_priv->completion);
+    wait_for_completion(&lamc_priv->completion);
+}
+
+
 static void amc525_lamc_pci_remove(struct pci_dev *pdev)
 {
     printk(KERN_INFO "Removing AMC525 device\n");
     struct amc525_lamc_priv *lamc_priv = pci_get_drvdata(pdev);
 
     destroy_device_nodes(lamc_priv, device_class);
+    wait_for_clients(lamc_priv);
+
     terminate_board(pdev);
     disable_board(pdev);
     release_board(lamc_priv->board);
+
     kfree(lamc_priv);
 }
 

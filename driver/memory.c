@@ -7,6 +7,7 @@
 #include <linux/pci.h>
 
 #include "error.h"
+#include "amc525_lamc_pci_core.h"
 #include "amc525_lamc_pci_device.h"
 #include "dma_control.h"
 
@@ -52,6 +53,7 @@ no_context:
 static int lamc_pci_dma_release(struct inode *inode, struct file *file)
 {
     kfree(file->private_data);
+    amc525_lamc_pci_release(inode);
     return 0;
 }
 

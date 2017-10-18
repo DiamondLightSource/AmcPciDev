@@ -10,6 +10,7 @@
 #include <linux/poll.h>
 
 #include "error.h"
+#include "amc525_lamc_pci_core.h"
 #include "amc525_lamc_pci_device.h"
 #include "interrupts.h"
 #include "registers.h"
@@ -70,6 +71,8 @@ static int lamc_pci_reg_release(struct inode *inode, struct file *file)
     mutex_unlock(&locking->mutex);
 
     kfree(context);
+
+    amc525_lamc_pci_release(inode);
     return 0;
 }
 
