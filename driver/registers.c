@@ -10,8 +10,8 @@
 #include <linux/poll.h>
 
 #include "error.h"
-#include "amc525_lamc_pci_core.h"
-#include "amc525_lamc_pci_device.h"
+#include "amc_pci_core.h"
+#include "amc_pci_device.h"
 #include "interrupts.h"
 #include "registers.h"
 

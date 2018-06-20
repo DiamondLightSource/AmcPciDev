@@ -24,7 +24,7 @@ EXTRA_CFLAGS += -DVERSION=$(VERSION)
 
 obj-m := amc525_lamc_priv.o
 
-amc525_lamc_priv-objs += amc525_lamc_pci_core.o
+amc525_lamc_priv-objs += amc_pci_core.o
 amc525_lamc_priv-objs += dma_control.o
 amc525_lamc_priv-objs += interrupts.o
 amc525_lamc_priv-objs += memory.o
