@@ -1,6 +1,6 @@
-PACKAGE_NAME="amc525_lamc_priv"
+PACKAGE_NAME="amc_pci"
 PACKAGE_VERSION="@@VERSION@@"
-BUILT_MODULE_NAME[0]="amc525_lamc_priv"
+BUILT_MODULE_NAME[0]="amc_pci"
 DEST_MODULE_LOCATION[0]="/extra"
 MAKE[0]="make -j1 KERNEL_DIR=$kernel_source_dir VERSION=@@VERSION@@"
 AUTOINSTALL=YES

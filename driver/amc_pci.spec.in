@@ -1,5 +1,5 @@
 Summary: Kernel driver for AMC525 FPGA card
-Name: amc525_lamc_priv
+Name: amc_pci
 Version: @@VERSION@@
 Release: 1dkms
 License: GPL

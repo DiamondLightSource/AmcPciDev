@@ -22,13 +22,13 @@ EXTRA_CFLAGS += -Wno-sign-compare
 EXTRA_CFLAGS += -DVERSION=$(VERSION)
 
 
-obj-m := amc525_lamc_priv.o
+obj-m := amc_pci.o
 
-amc525_lamc_priv-objs += amc_pci_core.o
-amc525_lamc_priv-objs += dma_control.o
-amc525_lamc_priv-objs += interrupts.o
-amc525_lamc_priv-objs += memory.o
-amc525_lamc_priv-objs += registers.o
-amc525_lamc_priv-objs += debug.o
+amc_pci-objs += amc_pci_core.o
+amc_pci-objs += dma_control.o
+amc_pci-objs += interrupts.o
+amc_pci-objs += memory.o
+amc_pci-objs += registers.o
+amc_pci-objs += debug.o
 
 # vim: set filetype=make:

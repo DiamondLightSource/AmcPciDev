@@ -15,7 +15,7 @@ include $(AMC_TOP)/Makefile.common
 SRCDIR = $(AMC_TOP)/driver
 KBUILD_DIR = $(CURDIR)/kbuild-$(kernelver)
 
-DRIVER_NAME = amc525_lamc_priv
+DRIVER_NAME = amc_pci
 
 # The set valid characters in an rpm version string is a bit restricted, so go
 # with the valid rules: only letters, digits, and periods.
@@ -95,10 +95,10 @@ install-dkms: dkms-files
 	dkms add amc_pci/$(RPM_VERSION)
 	dkms build amc_pci/$(RPM_VERSION)
 	dkms install amc_pci/$(RPM_VERSION)
-	modprobe amc525_lamc_priv
+	modprobe amc_pci
 
 # To remove dkms run
-#       dkms remove amc525_lamc_priv/$(RPM_VERSION) --all
+#       dkms remove amc_pci/$(RPM_VERSION) --all
 
 .PHONY: dkms-files install-dkms
 
@@ -106,7 +106,7 @@ install-dkms: dkms-files
 # ------------------------------------------------------------------------------
 # Build dkms RPM
 
-RPM_FILE = amc525_lamc_priv-$(RPM_VERSION)-1dkms.noarch.rpm
+RPM_FILE = amc_pci-$(RPM_VERSION)-1dkms.noarch.rpm
 
 amc_pci.spec: amc_pci.spec.in
 	sed s/@@VERSION@@/$(RPM_VERSION)/g $< >$@
