@@ -24,7 +24,7 @@ struct register_context {
 };
 
 
-int lamc_pci_reg_open(
+int amc_pci_reg_open(
     struct file *file, struct pci_dev *dev,
     struct interrupt_control *interrupts,
     struct register_locking *locking)
@@ -59,7 +59,7 @@ no_context:
 }
 
 
-static int lamc_pci_reg_release(struct inode *inode, struct file *file)
+static int amc_pci_reg_release(struct inode *inode, struct file *file)
 {
     struct register_context *context = file->private_data;
     struct register_locking *locking = context->locking;
@@ -72,12 +72,12 @@ static int lamc_pci_reg_release(struct inode *inode, struct file *file)
 
     kfree(context);
 
-    amc525_lamc_pci_release(inode);
+    amc_pci_release(inode);
     return 0;
 }
 
 
-static int lamc_pci_reg_mmap(struct file *file, struct vm_area_struct *vma)
+static int amc_pci_reg_mmap(struct file *file, struct vm_area_struct *vma)
 {
     struct register_context *context = file->private_data;
 
@@ -141,17 +141,17 @@ static long unlock_register(struct register_context *context)
 }
 
 
-static long lamc_pci_reg_ioctl(
+static long amc_pci_reg_ioctl(
     struct file *file, unsigned int cmd, unsigned long arg)
 {
     struct register_context *context = file->private_data;
     switch (cmd)
     {
-        case LAMC_MAP_SIZE:
+        case AMC_MAP_SIZE:
             return context->length;
-        case LAMC_REG_LOCK:
+        case AMC_REG_LOCK:
             return lock_register(context);
-        case LAMC_REG_UNLOCK:
+        case AMC_REG_UNLOCK:
             return unlock_register(context);
         default:
             return -EINVAL;
@@ -160,7 +160,7 @@ static long lamc_pci_reg_ioctl(
 
 
 /* This will return one byte with the next available event mask. */
-static ssize_t lamc_pci_reg_read(
+static ssize_t amc_pci_reg_read(
     struct file *file, char __user *buf, size_t count, loff_t *f_pos)
 {
     struct register_context *context = file->private_data;
@@ -191,7 +191,7 @@ static ssize_t lamc_pci_reg_read(
 }
 
 
-static unsigned int lamc_pci_reg_poll(
+static unsigned int amc_pci_reg_poll(
     struct file *file, struct poll_table_struct *poll)
 {
     struct register_context *context = file->private_data;
@@ -204,11 +204,11 @@ static unsigned int lamc_pci_reg_poll(
 }
 
 
-struct file_operations lamc_pci_reg_fops = {
+struct file_operations amc_pci_reg_fops = {
     .owner = THIS_MODULE,
-    .release = lamc_pci_reg_release,
-    .unlocked_ioctl = lamc_pci_reg_ioctl,
-    .mmap = lamc_pci_reg_mmap,
-    .read = lamc_pci_reg_read,
-    .poll = lamc_pci_reg_poll,
+    .release = amc_pci_reg_release,
+    .unlocked_ioctl = amc_pci_reg_ioctl,
+    .mmap = amc_pci_reg_mmap,
+    .read = amc_pci_reg_read,
+    .poll = amc_pci_reg_poll,
 };

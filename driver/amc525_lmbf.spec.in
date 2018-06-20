@@ -1,4 +1,4 @@
-Summary: Kernel driver for AMC525 LFPGA card
+Summary: Kernel driver for AMC525 FPGA card
 Name: amc525_lamc_priv
 Version: @@VERSION@@
 Release: 1dkms
@@ -15,7 +15,7 @@ Packager: Michael Abbott <michael.abbott@diamond.ac.uk>
 %define udevdir /etc/udev/rules.d
 
 %description
-Installs the kernel driver for interfacing to the Lfirmware running
+Installs the kernel driver for interfacing to the firmware running
 on an AMC525 FPGA card.  The driver is installed using dkms.
 
 %install

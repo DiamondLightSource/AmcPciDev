@@ -9,9 +9,9 @@ struct register_locking {
 };
 
 /* Called to open the file. */
-int lamc_pci_reg_open(
+int amc_pci_reg_open(
     struct file *file, struct pci_dev *dev,
     struct interrupt_control *interrupts,
     struct register_locking *locking);
 
-extern struct file_operations lamc_pci_reg_fops;
+extern struct file_operations amc_pci_reg_fops;

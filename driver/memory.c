@@ -28,7 +28,7 @@ struct memory_context {
 };
 
 
-int lamc_pci_dma_open(
+int amc_pci_dma_open(
     struct file *file, struct dma_control *dma, size_t base, size_t length)
 {
     int rc = 0;
@@ -50,15 +50,15 @@ no_context:
 }
 
 
-static int lamc_pci_dma_release(struct inode *inode, struct file *file)
+static int amc_pci_dma_release(struct inode *inode, struct file *file)
 {
     kfree(file->private_data);
-    amc525_lamc_pci_release(inode);
+    amc_pci_release(inode);
     return 0;
 }
 
 
-static ssize_t lamc_pci_dma_read(
+static ssize_t amc_pci_dma_read(
     struct file *file, char __user *buf, size_t count, loff_t *f_pos)
 {
     struct memory_context *context = file->private_data;
@@ -96,7 +96,7 @@ static ssize_t lamc_pci_dma_read(
 }
 
 
-static loff_t lamc_pci_dma_llseek(struct file *file, loff_t f_pos, int whence)
+static loff_t amc_pci_dma_llseek(struct file *file, loff_t f_pos, int whence)
 {
     struct memory_context *context = file->private_data;
     return generic_file_llseek_size(
@@ -104,13 +104,13 @@ static loff_t lamc_pci_dma_llseek(struct file *file, loff_t f_pos, int whence)
 }
 
 
-static long lamc_pci_mem_ioctl(
+static long amc_pci_mem_ioctl(
     struct file *file, unsigned int cmd, unsigned long arg)
 {
     struct memory_context *context = file->private_data;
     switch (cmd)
     {
-        case LAMC_BUF_SIZE:
+        case AMC_BUF_SIZE:
             return dma_buffer_size(context->dma);
         default:
             return -EINVAL;
@@ -118,10 +118,10 @@ static long lamc_pci_mem_ioctl(
 }
 
 
-struct file_operations lamc_pci_dma_fops = {
+struct file_operations amc_pci_dma_fops = {
     .owner = THIS_MODULE,
-    .release = lamc_pci_dma_release,
-    .read = lamc_pci_dma_read,
-    .llseek = lamc_pci_dma_llseek,
-    .unlocked_ioctl = lamc_pci_mem_ioctl,
+    .release = amc_pci_dma_release,
+    .read = amc_pci_dma_read,
+    .llseek = amc_pci_dma_llseek,
+    .unlocked_ioctl = amc_pci_mem_ioctl,
 };
