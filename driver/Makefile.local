@@ -11,17 +11,22 @@ kernelver = $(shell uname -r)
 KERNEL_DIR = /lib/modules/$(kernelver)/build
 
 include $(AMC_TOP)/Makefile.common
+include $(AMC_TOP)/VERSION
 
 SRCDIR = $(AMC_TOP)/driver
 KBUILD_DIR = $(CURDIR)/kbuild-$(kernelver)
 
 DRIVER_NAME = amc_pci
 
-# The set valid characters in an rpm version string is a bit restricted, so go
-# with the valid rules: only letters, digits, and periods.
-# Note: see https://fedoraproject.org/wiki/Packaging:Versioning for information
-# on RPM versioning.  We'll want to obey some of these rules if we can.
-RPM_VERSION = $(shell printf %s $(GIT_VERSION) | tr -c a-zA-Z0-9 .)
+# We use two separate version strings for the driver.  The DRV_VERSION string
+# contains the full version information and is used in the driver version string
+# and the generated file names.
+#   The AMC_VERSION takes the dotted version name (without extra version info)
+# and follows the Red Hat versioning rules: only letters, digits, and periods.
+# See https://fedoraproject.org/wiki/Packaging:Versioning for information on RPM
+# versioning.  We'll want to obey these rules if we can.
+DRV_VERSION = $(VERSION_EXTRA)$(AMC_VERSION)-$(GIT_VERSION)
+RPM_VERSION = $(AMC_VERSION)
 
 
 # Default target is to build the driver
@@ -50,7 +55,7 @@ $(DRIVER_BUILD_FILES): $(KBUILD_DIR)/%: $(SRCDIR)/%
 	ln -s $$(readlink -e $<) $@
 
 $(DRIVER_KO): $(DRIVER_BUILD_FILES)
-	$(MAKE) -C $(KERNEL_DIR) M=$(KBUILD_DIR) VERSION=$(RPM_VERSION) modules
+	$(MAKE) -C $(KERNEL_DIR) M=$(KBUILD_DIR) VERSION=$(DRV_VERSION) modules
 	touch $@
 
 
@@ -76,10 +81,13 @@ rmmod:
 # Install dkms in target system
 
 DKMS_SRC_DIR = $(DESTDIR)/usr/src/amc_pci-$(RPM_VERSION)/
+VERSION_SUBST = \
+    's/@@DRV_VERSION@@/$(DRV_VERSION)/;s/@@RPM_VERSION@@/$(RPM_VERSION)/'
+
 
 # We substitute the version information into dkms.conf
-dkms.conf: dkms.conf.in
-	sed s/@@VERSION@@/$(RPM_VERSION)/g $< >$@
+dkms.conf: dkms.conf.in $(AMC_TOP)/VERSION
+	sed $(VERSION_SUBST) $< >$@
 
 # Install files where dkms needs them.  Supports DESTDIR for local install
 dkms-files: dkms.conf Makefile $(DRIVER_FILES)
@@ -98,9 +106,14 @@ install-dkms: dkms-files
 	modprobe amc_pci
 
 # To remove dkms run
-#       dkms remove amc_pci/$(RPM_VERSION) --all
+remove-dkms:
+	[ $$(id -u) = 0 ]    # Must be run as root
+	-modprobe -r amc_pci
+	dkms remove amc_pci/$(RPM_VERSION) --all
+	rm -rf $(DKMS_SRC_DIR)
+	rm $(DESTDIR)/etc/udev/rules.d/11-amc_pci.rules
 
-.PHONY: dkms-files install-dkms
+.PHONY: dkms-files install-dkms remove-dkms
 
 
 # ------------------------------------------------------------------------------
@@ -108,7 +121,7 @@ install-dkms: dkms-files
 
 RPM_FILE = amc_pci-$(RPM_VERSION)-1dkms.noarch.rpm
 
-amc_pci.spec: amc_pci.spec.in
+amc_pci.spec: amc_pci.spec.in $(AMC_TOP)/VERSION
 	sed s/@@VERSION@@/$(RPM_VERSION)/g $< >$@
 
 driver-rpm: dkms.conf amc_pci.spec
