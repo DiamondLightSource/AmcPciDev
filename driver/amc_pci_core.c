@@ -147,8 +147,7 @@ static int amc_pci_open(struct inode *inode, struct file *file)
     switch (minor_index)
     {
         case MINOR_REG:
-            rc = amc_pci_reg_open(
-                file, amc_priv->dev, amc_priv->interrupts, &amc_priv->locking);
+            rc = amc_pci_reg_open(file, amc_priv->dev, amc_priv->interrupts, &amc_priv->locking);
             break;
         case MINOR_DDR0:
             rc = amc_pci_dma_open(file, amc_priv->dma, DDR0_BASE, DDR0_LENGTH);
