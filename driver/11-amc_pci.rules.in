@@ -18,8 +18,8 @@ SUBSYSTEM=="amc_pci", GROUP="@@DRV_GROUP@@", MODE="0660"
 #           k=%k;                       # Original name from driver
 #           echo ${k##*.}'",            # Strip off all but the last part
 #       IMPORT{builtin}="path_id",      # Defines ID_PATH
-#       SYMLINK+="amc_pci/$env{ID_PATH}/amc_pci.%c"
+#       SYMLINK+="amc525_mbf/$env{ID_PATH}/amc525_mbf.%c"
 
-SUBSYSTEM=="amc_pci", PROGRAM="/bin/sh -c 'k=%k; echo ${k##*.}'", IMPORT{builtin}="path_id", SYMLINK+="amc_pci/$env{ID_PATH}/amc_pci.%c"
+SUBSYSTEM=="amc_pci", PROGRAM="/bin/sh -c 'k=%k; echo ${k##*.}'", IMPORT{builtin}="path_id", SYMLINK+="amc525_mbf/$env{ID_PATH}/amc525_mbf.%c"
 
 # vim: set filetype=udevrules:
