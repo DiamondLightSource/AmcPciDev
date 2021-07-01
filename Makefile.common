@@ -1,0 +1,31 @@
+# This is the configuration part of the makefile designed to be shared among
+# other makefiles as required.
+
+# ------------------------------------------------------------------------------
+
+BUILD_DIR = $(TOP)/build
+DRIVER_BUILD_DIR = $(BUILD_DIR)/driver
+
+# Extra C compiler flags
+CFLAGS_EXTRA =
+
+# ------------------------------------------------------------------------------
+
+# The following extremly tricksy makefile code converts the list of MUST_DEFINE
+# names into symbols which will generate a suitable error when an attempt is
+# made to expand them.  These will be defined in the CONFIG file.
+define _MUST_DEFINE
+ifndef $1
+    $1 = $$(error Must define symbol $1 in CONFIG file)
+endif
+endef
+_EVAL_MUST_DEFINE = $(eval $(_MUST_DEFINE))
+$(foreach var,$(MUST_DEFINE),$(call _EVAL_MUST_DEFINE,$(var)))
+
+-include $(TOP)/CONFIG
+
+# The default shell used by make is sh, but we may want to use the bash pipefail
+# option.  On most systems this still works because sh is now usually linked to
+# bash, but on Ubuntu sh is linked to dash which doesn't support pipefail.
+# Setting this option is always safe, just makes bash an explicit dependency.
+SHELL = bash
