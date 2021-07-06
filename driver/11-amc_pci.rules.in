@@ -4,7 +4,7 @@
 # Copy this file to /etc/udev/rules.d
 
 # Start by giving full device access to comp group.
-SUBSYSTEM=="amc_pci", GROUP="@@DRV_GROUP@@", MODE="0660"
+SUBSYSTEM=="amc525_mbf", GROUP="@@DRV_GROUP@@", MODE="0660"
 
 # Now create geographical addresses.  We have to be bit tricky here to get the
 # right device names, as we don't want the rather arbitrary sequence number
@@ -20,6 +20,6 @@ SUBSYSTEM=="amc_pci", GROUP="@@DRV_GROUP@@", MODE="0660"
 #       IMPORT{builtin}="path_id",      # Defines ID_PATH
 #       SYMLINK+="amc525_mbf/$env{ID_PATH}/amc525_mbf.%c"
 
-SUBSYSTEM=="amc_pci", PROGRAM="/bin/sh -c 'k=%k; echo ${k##*.}'", IMPORT{builtin}="path_id", SYMLINK+="amc525_mbf/$env{ID_PATH}/amc525_mbf.%c"
+SUBSYSTEM=="amc525_mbf", PROGRAM="/bin/sh -c 'k=%k; echo ${k##*.}'", IMPORT{builtin}="path_id", SYMLINK+="amc525_mbf/$env{ID_PATH}/amc525_mbf.%c"
 
 # vim: set filetype=udevrules:
