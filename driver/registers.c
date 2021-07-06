@@ -21,6 +21,7 @@ struct register_context {
     size_t length;
     struct interrupt_control *interrupts;
     struct register_locking *locking;
+    int reader_number;
 };
 
 
@@ -29,7 +30,11 @@ int amc_pci_reg_open(
     struct interrupt_control *interrupts,
     struct register_locking *locking)
 {
+    int reader_number;
     int rc = 0;
+
+    TEST_OK(assign_reader_number(interrupts, &reader_number),
+        rc=-EIO, no_reader_slot, "No reader slot");
     struct register_context *context =
         kmalloc(sizeof(struct register_context), GFP_KERNEL);
     TEST_PTR(context, rc, no_context, "Unable to allocate register context");
@@ -39,6 +44,7 @@ int amc_pci_reg_open(
         .length = pci_resource_len(dev, 0),
         .interrupts = interrupts,
         .locking = locking,
+        .reader_number = reader_number
     };
 
     /* Check for lock state and count ourself in if we can. */
@@ -55,6 +61,8 @@ locked:
     mutex_unlock(&locking->mutex);
     kfree(context);
 no_context:
+    unassign_reader_number(interrupts, reader_number);
+no_reader_slot:
     return rc;
 }
 
@@ -69,9 +77,8 @@ static int amc_pci_reg_release(struct inode *inode, struct file *file)
         locking->locked_by = NULL;
     locking->reference_count -= 1;
     mutex_unlock(&locking->mutex);
-
+    unassign_reader_number(context->interrupts, context->reader_number);
     kfree(context);
-
     amc_pci_release(inode);
     return 0;
 }
@@ -167,7 +174,8 @@ static ssize_t amc_pci_reg_read(
 
     /* In non blocking mode if we're not ready then say so. */
     bool no_wait = file->f_flags & O_NONBLOCK;
-    if (no_wait  &&  !interrupt_events_ready(context->interrupts))
+    if (no_wait  &&  !interrupt_events_ready(
+            context->interrupts, context->reader_number))
         return -EAGAIN;
 
     /* Ensure we've asked for at least 4 bytes. */
@@ -175,7 +183,8 @@ static ssize_t amc_pci_reg_read(
         return -EIO;
 
     uint32_t events;
-    int rc = read_interrupt_events(context->interrupts, no_wait, &events);
+    int rc = read_interrupt_events(context->interrupts, no_wait, &events,
+                                   context->reader_number);
     if (rc < 0)
         /* Read was interrupted. */
         return rc;
@@ -197,7 +206,7 @@ static unsigned int amc_pci_reg_poll(
     struct register_context *context = file->private_data;
 
     poll_wait(file, interrupts_wait_queue(context->interrupts), poll);
-    if (interrupt_events_ready(context->interrupts))
+    if (interrupt_events_ready(context->interrupts, context->reader_number))
         return POLLIN | POLLRDNORM;
     else
         return 0;

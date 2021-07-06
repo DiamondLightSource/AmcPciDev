@@ -38,25 +38,48 @@ struct interrupt_control {
     /* Wait queue for user-space interrupt events. */
     wait_queue_head_t wait_queue;
     /* Set of user-space events seen. */
-    atomic_t events;
+    atomic_t events[N_EVENT_READERS];
+    long active_readers;
 };
 
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
-
-bool interrupt_events_ready(struct interrupt_control *control)
+bool assign_reader_number(
+    struct interrupt_control *interrupts, int *reader_number)
 {
-    return atomic_read(&control->events);
+    for (int bit=0; bit < N_EVENT_READERS; bit++) {
+        if (!test_and_set_bit(bit, &interrupts->active_readers)) {
+            // reset events for new readers
+            atomic_set(&interrupts->events[bit], 0);
+            *reader_number = bit;
+            return true;
+        }
+    }
+    return false;
+}
+
+
+void unassign_reader_number(struct interrupt_control *interrupts,
+    int reader_number)
+{
+    clear_bit(reader_number, &interrupts->active_readers);
+}
+
+
+bool interrupt_events_ready(struct interrupt_control *control, int reader)
+{
+    return atomic_read(&control->events[reader]);
 }
 
 
 int read_interrupt_events(
-    struct interrupt_control *control, bool no_wait, uint32_t *events)
+    struct interrupt_control *control, bool no_wait, uint32_t *events,
+    int reader)
 {
     if (no_wait)
     {
-        *events = (uint32_t) atomic_xchg(&control->events, 0);
+        *events = (uint32_t) atomic_xchg(&control->events[reader], 0);
         return 0;
     }
     else
@@ -65,7 +88,7 @@ int read_interrupt_events(
          * that we'll never return a non zero value unless no_wait is true. */
         return wait_event_interruptible(
             control->wait_queue,
-            (*events = (uint32_t) atomic_xchg(&control->events, 0)));
+            (*events = (uint32_t) atomic_xchg(&control->events[reader], 0)));
 }
 
 
@@ -78,15 +101,11 @@ wait_queue_head_t *interrupts_wait_queue(struct interrupt_control *control)
 /* Stores user space interrupt events and notifies as appropriate. */
 static void event_interrupt(struct interrupt_control *control, uint32_t events)
 {
-    /* Add the new events into the current event mask. */
-    int old_events;
-    do
-        old_events = atomic_read(&control->events);
-    while (atomic_cmpxchg(
-        &control->events, old_events, old_events | events) != old_events);
-
+    /* Add the new events into the current event masks. */
+    for (int reader=0; reader < N_EVENT_READERS; reader++)
+         atomic_or(events, &control->events[reader]);
     /* Let any listeners know. */
-    wake_up_interruptible(&control->wait_queue);
+    wake_up_all(&control->wait_queue);
 }
 
 
@@ -124,15 +143,13 @@ int initialise_interrupt_control(
 
     /* Allocate memory for interrupt state. */
     struct interrupt_control *control =
-        kmalloc(sizeof(struct interrupt_control), GFP_KERNEL);
+        kzalloc(sizeof(struct interrupt_control), GFP_KERNEL);
     TEST_PTR(control, rc, no_memory, "Unable to allocate interrupt control");
     *control = (struct interrupt_control) {
         .intc = regs,
-        .dma = dma,
-        .events = (atomic_t) ATOMIC_INIT(0),
+        .dma = dma
     };
     *pcontrol = control;
-
     init_waitqueue_head(&control->wait_queue);
 
     /* Start with the interrupt controller disabled while we internally enable
