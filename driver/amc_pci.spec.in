@@ -8,6 +8,7 @@ BuildRoot: %{_tmppath}/%{name}-%{version}-root
 BuildArch: noarch
 Requires: dkms
 Requires: udev
+Conflicts: amc525_mbf
 Packager: Michael Abbott <michael.abbott@diamond.ac.uk>
 
 # The two target directories
