@@ -2,12 +2,20 @@
 # other makefiles as required.
 
 # ------------------------------------------------------------------------------
+# List of symbols which can be defined in the CONFIG file
+
+# Driver group for amc525_mbf device nodes
+MUST_DEFINE += DRV_GROUP
+
+
+# The following defaults can be overridden in the CONFIG file
 
 BUILD_DIR = $(TOP)/build
 DRIVER_BUILD_DIR = $(BUILD_DIR)/driver
 
 # Extra C compiler flags
 CFLAGS_EXTRA =
+
 
 # ------------------------------------------------------------------------------
 

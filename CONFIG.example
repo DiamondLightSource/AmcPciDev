@@ -1,0 +1,6 @@
+# Common configuration
+
+# Permissions for the driver
+DRV_GROUP = 500
+
+# vim: set filetype=make:

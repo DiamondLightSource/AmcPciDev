@@ -1,2 +1,5 @@
+# CONFIG file is not under git
+/CONFIG
+
 # Support default build directory
 /build
