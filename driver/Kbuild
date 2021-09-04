@@ -30,5 +30,23 @@ amc_pci-objs += interrupts.o
 amc_pci-objs += memory.o
 amc_pci-objs += registers.o
 amc_pci-objs += debug.o
+amc_pci-objs += prom_processing.o
+amc_pci-objs += utils.o
+
+
+$(obj)/prom_processing.o: $(src)/prom_processing.c $(obj)/default_prom.c
+
+
+$(obj)/default_prom.c: $(src)/default_prom.config $(src)/tools
+	echo -n 'static const char default_prom[] = ' > $@
+	$(src)/tools/prom_data_creator.py --format c $< >> $@
+
+
+ifneq ($(CONFIG_KUNIT),)
+obj-m += amc_pci_test.o
+amc_pci_test-objs += prom_processing.o
+amc_pci_test-objs += prom_processing_test.o
+amc_pci_test-objs += utils.o
+endif
 
 # vim: set filetype=make:

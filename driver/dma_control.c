@@ -97,7 +97,6 @@ static void reset_dma_controller(struct dma_control *dma)
         count += 1;
 
     /* Now restore the default working state. */
-    writel(0x00008000, &dma->regs->sa_msb);
     writel(CDMACR_IrqEn | CDMACR_Err_IrqEn, &dma->regs->cdmacr);
 }
 
@@ -161,6 +160,7 @@ ssize_t read_dma_memory(
     maybe_reset_dma(dma);
 
     /* Configure the engine for transfer. */
+    writel((start >> 32) & 0xffff, &dma->regs->sa_msb);
     writel((uint32_t) dma_start, &dma->regs->sa);
     writel((uint32_t) dma->buffer_dma, &dma->regs->da);
     writel((uint32_t) (dma->buffer_dma >> 32), &dma->regs->da_msb);

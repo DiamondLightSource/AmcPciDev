@@ -17,7 +17,9 @@
 #include "interrupts.h"
 #include "registers.h"
 #include "memory.h"
+#include "prom_processing.h"
 #include "debug.h"
+#include "utils.h"
 
 #define _S(x)   #x
 #define S(x)    _S(x)
@@ -34,13 +36,6 @@ MODULE_VERSION(S(VERSION));
 #define AMC525_SID      0x0007
 
 
-/* Physical layout in DDR address space of the two memory areas. */
-#define DDR0_BASE       0
-#define DDR0_LENGTH     0x80000000      // 2GB
-#define DDR1_BASE       0x80000000
-#define DDR1_LENGTH     0x08000000      // 128MB
-
-
 /* Expected length of BAR2. */
 #define BAR2_LENGTH     16384           // 4 separate IO pages
 
@@ -48,7 +43,7 @@ MODULE_VERSION(S(VERSION));
 /* Address offsets into BAR2. */
 #define CDMA_OFFSET     0x0000          // DMA controller       (PG034)
 #define INTC_OFFSET     0x1000          // Interrupt controller (PG099)
-
+#define PROM_OFFSET     0x2000          // PROM memory
 
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
@@ -79,26 +74,16 @@ struct amc_pci {
 
     /* Interrupt controller. */
     struct interrupt_control *interrupts;
+
+    /* PROM data */
+    struct prom_context *prom;
 };
 
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 /* Basic file operations. */
 
-static struct {
-    const char *name;
-    struct file_operations *fops;
-} fops_info[] = {
-    { .name = "reg",    .fops = &amc_pci_reg_fops, },
-    { .name = "ddr0",   .fops = &amc_pci_dma_fops, },
-    { .name = "ddr1",   .fops = &amc_pci_dma_fops, },
-};
-
-#define MINORS_PER_BOARD    ARRAY_SIZE(fops_info)
-
-#define MINOR_REG       0
-#define MINOR_DDR0      1
-#define MINOR_DDR1      2
+#define MAX_MINORS_PER_BOARD    16
 
 
 /* This must be called whenever any file handle is released. */
@@ -125,19 +110,43 @@ static int amc_pci_open(struct inode *inode, struct file *file)
     /* Replace the file's f_ops with our own and perform any device specific
      * initialisation. */
     int minor_index = iminor(inode) - amc_priv->minor;
-    file->f_op = fops_info[minor_index].fops;
+
     int rc = -EINVAL;
-    switch (minor_index)
+    struct prom_entry *pentry = prom_find_entry(amc_priv->prom, minor_index);
+
+    if (pentry)
     {
-        case MINOR_REG:
-            rc = amc_pci_reg_open(file, amc_priv->dev, amc_priv->interrupts, &amc_priv->locking);
-            break;
-        case MINOR_DDR0:
-            rc = amc_pci_dma_open(file, amc_priv->dma, DDR0_BASE, DDR0_LENGTH);
-            break;
-        case MINOR_DDR1:
-            rc = amc_pci_dma_open(file, amc_priv->dma, DDR1_BASE, DDR1_LENGTH);
-            break;
+        switch (pentry->tag)
+        {
+            case PROM_DEVICE_TAG:
+                file->f_op = &amc_pci_reg_fops;
+                rc = amc_pci_reg_open(
+                    file, amc_priv->dev, amc_priv->interrupts,
+                        &amc_priv->locking);
+                break;
+            case PROM_DMA_TAG:
+            {
+                struct prom_dma_entry *dma_entry =
+                    (struct prom_dma_entry *) pentry;
+                if (dma_entry->perm != PROM_DMA_PERM_READ)
+                {
+                    printk(KERN_ERR
+                        "Driver only supports read operation for DMA target "
+                        "memory\n");
+                }
+                else
+                {
+                    file->f_op = &amc_pci_dma_fops;
+                    rc = amc_pci_dma_open(
+                        file, amc_priv->dma, dma_entry->base,
+                        dma_entry->length);
+                }
+                break;
+            }
+            default:
+                printk(KERN_INFO "Unknown entry type found %02x\n",
+                    pentry->tag);
+        }
     }
 
     if (rc < 0)
@@ -160,15 +169,58 @@ static int create_device_nodes(
 
     cdev_init(&amc_priv->cdev, &base_fops);
     amc_priv->cdev.owner = THIS_MODULE;
-    int rc = cdev_add(&amc_priv->cdev, MKDEV(major, minor), MINORS_PER_BOARD);
+    int rc = cdev_add(&amc_priv->cdev, MKDEV(major, minor),
+        amc_priv->prom->nentries);
     TEST_RC(rc, no_cdev, "Unable to add device");
 
-    for (int i = 0; i < MINORS_PER_BOARD; i ++)
-        device_create(
-            device_class, &pdev->dev, MKDEV(major, minor + i), NULL,
-            "%s.%d.%s", DEVICE_NAME, amc_priv->board, fops_info[i].name);
+    size_t i = 0;
+    char *device_name = NULL;
+    struct prom_entry *pentry;
+    prom_for_each_entry(pentry, amc_priv->prom)
+    {
+        switch (pentry->tag)
+        {
+            // it is assumed that the device entry is the first found
+            case PROM_DEVICE_TAG:
+            {
+                struct prom_device_entry *device_entry =
+                    (struct prom_device_entry *) pentry;
+                TEST_OK(!device_name, rc=-EINVAL, prom_error,
+                    "Only one device entry is supported in PROM\n");
+                device_name = device_entry->name;
+                device_create(
+                    device_class, &pdev->dev, MKDEV(major, minor + i), NULL,
+                    "%s.%d.reg", device_name, amc_priv->board);
+                break;
+            }
+            case PROM_DMA_TAG:
+            {
+                TEST_OK(device_name, rc=-EINVAL, prom_error,
+                    "No device description found in PROM");
+                struct prom_dma_entry *dma_entry =
+                    (struct prom_dma_entry *) pentry;
+                device_create(
+                    device_class, &pdev->dev, MKDEV(major, minor + i), NULL,
+                    "%s.%d.%s", device_name, amc_priv->board, dma_entry->name);
+                break;
+            }
+            default:
+                printk(KERN_INFO "Unknown entry type found %02x\n",
+                    pentry->tag);
+                rc = -EINVAL;
+                goto bad_entry;
+        }
+        i++;
+    }
     return 0;
 
+bad_entry:
+    while (i--)
+    {
+        device_destroy(device_class, MKDEV(major, minor + i));
+    }
+prom_error:
+    cdev_del(&amc_priv->cdev);
 no_cdev:
     return rc;
 }
@@ -180,7 +232,7 @@ static void destroy_device_nodes(
     int major = amc_priv->major;
     int minor = amc_priv->minor;
 
-    for (int i = 0; i < MINORS_PER_BOARD; i ++)
+    for (int i = 0; i < amc_priv->prom->nentries; i ++)
         device_destroy(device_class, MKDEV(major, minor + i));
     cdev_del(&amc_priv->cdev);
 }
@@ -194,7 +246,7 @@ static void destroy_device_nodes(
  * when allocating the device nodes. */
 
 #define MAX_BOARDS          4
-#define MAX_MINORS          (MAX_BOARDS * MINORS_PER_BOARD)
+#define MAX_MINORS          (MAX_BOARDS * MAX_MINORS_PER_BOARD)
 
 static struct class *device_class;  // Device class
 static dev_t device_major;          // Major device number for our device
@@ -274,6 +326,17 @@ static int initialise_board(struct pci_dev *pdev, struct amc_pci *amc_priv)
     amc_priv->ctrl_memory = pci_iomap(pdev, 2, BAR2_LENGTH);
     TEST_PTR(amc_priv->ctrl_memory, rc, no_bar2, "Unable to map control BAR");
 
+    struct prom_context *prom_context = load_prom(amc_priv->ctrl_memory + PROM_OFFSET);
+    if (IS_ERR(prom_context)) {
+        rc = PTR_ERR(prom_context);
+        goto prom_error;
+    }
+
+    amc_priv->prom = prom_context;
+
+    TEST_OK(amc_priv->prom->nentries <= MAX_MINORS_PER_BOARD, rc=-E2BIG,
+        no_minor, "Device requires more minors than maximum allowed");
+
     rc = initialise_dma_control(
         pdev, amc_priv->ctrl_memory + CDMA_OFFSET, &amc_priv->dma);
     if (rc < 0)  goto no_dma;
@@ -285,11 +348,13 @@ static int initialise_board(struct pci_dev *pdev, struct amc_pci *amc_priv)
 
     return 0;
 
-
     terminate_interrupt_control(pdev, amc_priv->interrupts);
 no_irq:
     terminate_dma_control(amc_priv->dma);
+no_minor:
+    release_prom_context(prom_context);
 no_dma:
+prom_error:
     pci_iounmap(pdev, amc_priv->ctrl_memory);
 no_bar2:
     return rc;
@@ -302,6 +367,7 @@ static void terminate_board(struct pci_dev *pdev)
     terminate_interrupt_control(pdev, amc_priv->interrupts);
     terminate_dma_control(amc_priv->dma);
     pci_iounmap(pdev, amc_priv->ctrl_memory);
+    release_prom_context(amc_priv->prom);
 }
 
 
@@ -318,7 +384,7 @@ static int amc_pci_probe(
     rc = get_free_board(&board);
     TEST_RC(rc, no_board, "Unable to allocate board number\n");
     int major = MAJOR(device_major);
-    int minor = board * MINORS_PER_BOARD;
+    int minor = board * MAX_MINORS_PER_BOARD;
 
     /* Allocate state for our board. */
     struct amc_pci *amc_priv = kmalloc(sizeof(struct amc_pci), GFP_KERNEL);

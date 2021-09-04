@@ -7,6 +7,7 @@ Group: System Environment/Kernel
 BuildRoot: %{_tmppath}/%{name}-%{version}-root
 BuildArch: noarch
 Requires: dkms
+Requires: python
 Requires: udev
 Conflicts: amc525_mbf
 Packager: Michael Abbott <michael.abbott@diamond.ac.uk>
@@ -15,6 +16,9 @@ Packager: Michael Abbott <michael.abbott@diamond.ac.uk>
 %define dkmsdir /usr/src/%{name}-%{version}
 %define udevdir /etc/udev/rules.d
 
+# Prevents error from unpackaged files created by rpm-build
+%define _unpackaged_files_terminate_build 0
+
 %description
 Installs the kernel driver for interfacing to the firmware running
 on an AMC525 FPGA card.  The driver is installed using dkms.
@@ -22,24 +26,31 @@ on an AMC525 FPGA card.  The driver is installed using dkms.
 %install
 rm -rf %{buildroot}
 mkdir -p %{buildroot}%{dkmsdir} %{buildroot}%{udevdir}
-install -m 0644 %{_sourcedir}/amc_pci_core.c     %{buildroot}%{dkmsdir}
-install -m 0644 %{_sourcedir}/amc_pci_core.h     %{buildroot}%{dkmsdir}
-install -m 0644 %{_sourcedir}/amc_pci_device.h   %{buildroot}%{dkmsdir}
-install -m 0644 %{_sourcedir}/debug.c               %{buildroot}%{dkmsdir}
-install -m 0644 %{_sourcedir}/debug.h               %{buildroot}%{dkmsdir}
-install -m 0644 %{_sourcedir}/dma_control.c         %{buildroot}%{dkmsdir}
-install -m 0644 %{_sourcedir}/dma_control.h         %{buildroot}%{dkmsdir}
-install -m 0644 %{_sourcedir}/error.h               %{buildroot}%{dkmsdir}
-install -m 0644 %{_sourcedir}/interrupts.c          %{buildroot}%{dkmsdir}
-install -m 0644 %{_sourcedir}/interrupts.h          %{buildroot}%{dkmsdir}
-install -m 0644 %{_sourcedir}/memory.c              %{buildroot}%{dkmsdir}
-install -m 0644 %{_sourcedir}/memory.h              %{buildroot}%{dkmsdir}
-install -m 0644 %{_sourcedir}/registers.c           %{buildroot}%{dkmsdir}
-install -m 0644 %{_sourcedir}/registers.h           %{buildroot}%{dkmsdir}
-install -m 0644 %{_sourcedir}/Makefile              %{buildroot}%{dkmsdir}
-install -m 0644 %{_sourcedir}/Kbuild                %{buildroot}%{dkmsdir}
-install -m 0644 %{_curdir}/dkms.conf                %{buildroot}%{dkmsdir}
-install -m 0644 %{_curdir}/11-amc_pci.rules      %{buildroot}%{udevdir}
+install -m 0644 %{_sourcedir}/amc_pci_core.c             %{buildroot}%{dkmsdir}
+install -m 0644 %{_sourcedir}/amc_pci_core.h             %{buildroot}%{dkmsdir}
+install -m 0644 %{_sourcedir}/amc_pci_device.h           %{buildroot}%{dkmsdir}
+install -m 0644 %{_sourcedir}/debug.c                    %{buildroot}%{dkmsdir}
+install -m 0644 %{_sourcedir}/debug.h                    %{buildroot}%{dkmsdir}
+install -m 0644 %{_sourcedir}/dma_control.c              %{buildroot}%{dkmsdir}
+install -m 0644 %{_sourcedir}/dma_control.h              %{buildroot}%{dkmsdir}
+install -m 0644 %{_sourcedir}/error.h                    %{buildroot}%{dkmsdir}
+install -m 0644 %{_sourcedir}/interrupts.c               %{buildroot}%{dkmsdir}
+install -m 0644 %{_sourcedir}/interrupts.h               %{buildroot}%{dkmsdir}
+install -m 0644 %{_sourcedir}/memory.c                   %{buildroot}%{dkmsdir}
+install -m 0644 %{_sourcedir}/memory.h                   %{buildroot}%{dkmsdir}
+install -m 0644 %{_sourcedir}/registers.c                %{buildroot}%{dkmsdir}
+install -m 0644 %{_sourcedir}/registers.h                %{buildroot}%{dkmsdir}
+install -m 0644 %{_sourcedir}/prom_processing.c          %{buildroot}%{dkmsdir}
+install -m 0644 %{_sourcedir}/prom_processing.h          %{buildroot}%{dkmsdir}
+install -m 0644 %{_sourcedir}/default_prom.config        %{buildroot}%{dkmsdir}
+install -d                                               %{buildroot}%{dkmsdir}/tools
+install -m 0755 %{_sourcedir}/tools/prom_data_creator.py %{buildroot}%{dkmsdir}/tools
+install -m 0644 %{_sourcedir}/utils.c                    %{buildroot}%{dkmsdir}
+install -m 0644 %{_sourcedir}/utils.h                    %{buildroot}%{dkmsdir}
+install -m 0644 %{_sourcedir}/Makefile                   %{buildroot}%{dkmsdir}
+install -m 0644 %{_sourcedir}/Kbuild                     %{buildroot}%{dkmsdir}
+install -m 0644 %{_curdir}/dkms.conf                     %{buildroot}%{dkmsdir}
+install -m 0644 %{_curdir}/11-amc_pci.rules              %{buildroot}%{udevdir}
 
 %files
 %{dkmsdir}/amc_pci_core.c
@@ -56,6 +67,12 @@ install -m 0644 %{_curdir}/11-amc_pci.rules      %{buildroot}%{udevdir}
 %{dkmsdir}/memory.h
 %{dkmsdir}/registers.c
 %{dkmsdir}/registers.h
+%{dkmsdir}/prom_processing.c
+%{dkmsdir}/prom_processing.h
+%{dkmsdir}/default_prom.config
+%{dkmsdir}/tools/prom_data_creator.py
+%{dkmsdir}/utils.c
+%{dkmsdir}/utils.h
 %{dkmsdir}/Makefile
 %{dkmsdir}/Kbuild
 %{dkmsdir}/dkms.conf

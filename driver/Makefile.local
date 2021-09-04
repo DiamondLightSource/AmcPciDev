@@ -43,6 +43,9 @@ DRIVER_FILES =
 DRIVER_FILES += $(wildcard $(SRCDIR)/*.c)
 DRIVER_FILES += $(wildcard $(SRCDIR)/*.h)
 DRIVER_FILES += $(SRCDIR)/Kbuild
+# Needed for autogenerating the default PROM data
+DRIVER_FILES += $(SRCDIR)/tools
+DRIVER_FILES += $(SRCDIR)/default_prom.config
 
 
 driver: $(DRIVER_KO)
