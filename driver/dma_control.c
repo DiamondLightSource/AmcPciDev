@@ -83,27 +83,51 @@ struct dma_control {
 /* DMA. */
 
 
-static void reset_dma_controller(struct dma_control *dma)
+static int reset_dma_controller(struct dma_control *dma)
 {
     writel(CDMACR_Reset, &dma->regs->cdmacr);
 
     /* In principle we should wait for the reset to complete, though it doesn't
      * actually seem to take an observable time normally.  We use a deadline
      * just in case something goes wrong so we don't deadlock. */
-    unsigned long deadline = jiffies + 2;
+    unsigned long deadline = jiffies + msecs_to_jiffies(1);
     int count = 0;
-    while (readl(&dma->regs->cdmacr) & CDMACR_Reset  &&
-           time_before(jiffies, deadline))
+    int reset_stat = 0;
+    while (
+        reset_stat=readl(&dma->regs->cdmacr),
+        (reset_stat & CDMACR_Reset) && time_before(jiffies, deadline))
+    {
         count += 1;
+    }
+
+    if (reset_stat & CDMACR_Reset)
+        return -EIO;
 
     /* Now restore the default working state. */
     writel(CDMACR_IrqEn | CDMACR_Err_IrqEn, &dma->regs->cdmacr);
+    return 0;
 }
 
 
-static void maybe_reset_dma(struct dma_control *dma)
+static int check_dma_status(struct dma_control *dma)
 {
     uint32_t status = readl(&dma->regs->cdmasr);
+    bool error = status & (CDMASR_DMADecErr | CDMASR_DMASlvErr | CDMASR_DMAIntErr);
+    if (error) {
+        printk(KERN_ERR "DMA error code: %08x\n", status);
+        return -EIO;
+    }
+    else
+    {
+        return 0;
+    }
+}
+
+
+static int maybe_reset_dma(struct dma_control *dma)
+{
+    uint32_t status = readl(&dma->regs->cdmasr);
+    int rc = 0;
     bool error =
         status & (CDMASR_DMADecErr | CDMASR_DMASlvErr | CDMASR_DMAIntErr);
     bool idle = status & CDMASR_Idle;
@@ -111,9 +135,10 @@ static void maybe_reset_dma(struct dma_control *dma)
     {
         printk(KERN_INFO "Forcing reset of DMA controller (status = %08x)\n",
             status);
-        reset_dma_controller(dma);
+        rc = reset_dma_controller(dma);
     }
     reinit_completion(&dma->dma_done);
+    return rc;
 }
 
 
@@ -129,6 +154,7 @@ void dma_interrupt(struct dma_control *dma)
 ssize_t read_dma_memory(
     struct dma_control *dma, size_t start, size_t count, void **buffer)
 {
+    ssize_t rc;
     /* Adjust the dma start and byte count to be multiples of the alignment so
      * that we don't upset the DMA engine. */
     size_t align_mask_low = DMA_ALIGNMENT - 1;
@@ -157,7 +183,8 @@ ssize_t read_dma_memory(
         dma->pdev, dma->buffer_dma, dma->buffer_size,  DMA_FROM_DEVICE);
 
     /* Reset the DMA engine if necessary. */
-    maybe_reset_dma(dma);
+    rc = (ssize_t) maybe_reset_dma(dma);
+    TEST_RC(rc, reset_error, "Failed to reset DMA");
 
     /* Configure the engine for transfer. */
     writel((start >> 32) & 0xffff, &dma->regs->sa_msb);
@@ -172,7 +199,7 @@ ssize_t read_dma_memory(
      * if the DMA engine does fail to complete then we have a bit of a problem
      * anyway, and if this completion were to be interrupted normally there
      * would be a hazard from the residual DMA in progress. */
-    ssize_t rc = wait_for_completion_killable(&dma->dma_done);
+    rc = wait_for_completion_killable(&dma->dma_done);
     TEST_RC(rc, killed, "DMA transfer killed");
 
     /* Restore the buffer to CPU access (really just flushes associated cache
@@ -180,9 +207,15 @@ ssize_t read_dma_memory(
     pci_dma_sync_single_for_cpu(
         dma->pdev, dma->buffer_dma, dma->buffer_size,  DMA_FROM_DEVICE);
 
+    rc = check_dma_status(dma);
+    if (rc)
+        goto dma_error;
+
     return count;
 
+dma_error:
 killed:
+reset_error:
     mutex_unlock(&dma->mutex);
     return rc;
 }
@@ -234,12 +267,13 @@ int initialise_dma_control(
     /* Final initialisation, now ready to run. */
     mutex_init(&dma->mutex);
     init_completion(&dma->dma_done);
-
-    reset_dma_controller(dma);
+    rc = reset_dma_controller(dma);
+    TEST_RC(rc, reset_error, "Failed to reset DMA");
 
     return 0;
 
 
+reset_error:
     pci_unmap_single(pdev, dma->buffer_dma, dma->buffer_size, DMA_FROM_DEVICE);
 no_dma_map:
     free_pages((unsigned long) dma->buffer, dma->buffer_shift - PAGE_SHIFT);
