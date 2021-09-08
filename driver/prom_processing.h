@@ -24,6 +24,7 @@
     }
 
 struct prom_context {
+    void __iomem *base;
     unsigned char buff[PROM_MAX_LENGTH + 1];
     size_t data_len;
     size_t nentries;
@@ -53,6 +54,8 @@ struct __attribute__((packed)) prom_end_entry {
     u16 checksum;
 };
 
+ssize_t read_prom(struct prom_context *context, char *buff, loff_t off,
+    size_t count);
 
 struct prom_context *load_prom(void __iomem *base);
 

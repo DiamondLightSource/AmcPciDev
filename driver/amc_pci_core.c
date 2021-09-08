@@ -9,6 +9,8 @@
 #include <linux/sched.h>
 #include <linux/slab.h>
 #include <linux/delay.h>
+#include <linux/kobject.h>
+#include <linux/sysfs.h>
 
 #include "error.h"
 #include "amc_pci_core.h"
@@ -84,6 +86,32 @@ struct amc_pci {
 /* Basic file operations. */
 
 #define MAX_MINORS_PER_BOARD    16
+
+
+static ssize_t prom_used_read(struct file *filp, struct kobject *kobj,
+    struct bin_attribute *attr, char *buff, loff_t off, size_t count)
+{
+    if (off > PROM_MAX_LENGTH)
+        return -EINVAL;
+    size_t size = MIN(count, PROM_MAX_LENGTH - off);
+    struct pci_dev *pdev = to_pci_dev(kobj_to_dev(kobj));
+    struct amc_pci *priv = pci_get_drvdata(pdev);
+    memcpy(buff, priv->prom->buff + off, size);
+    return size;
+}
+
+
+static ssize_t prom_read(struct file *filp, struct kobject *kobj,
+    struct bin_attribute *attr, char *buff, loff_t off, size_t count)
+{
+    struct pci_dev *pdev = to_pci_dev(kobj_to_dev(kobj));
+    struct amc_pci *priv = pci_get_drvdata(pdev);
+    return read_prom(priv->prom, buff, off, count);
+}
+
+
+static const BIN_ATTR_RO(prom_used, PROM_MAX_LENGTH);
+static const BIN_ATTR_RO(prom, PROM_MAX_LENGTH);
 
 
 /* This must be called whenever any file handle is released. */
@@ -317,7 +345,6 @@ static void disable_board(struct pci_dev *pdev)
 static int initialise_board(struct pci_dev *pdev, struct amc_pci *amc_priv)
 {
     int rc = 0;
-    pci_set_drvdata(pdev, amc_priv);
 
     /* Map the control area bar. */
     int bar2_length = pci_resource_len(pdev, 2);
@@ -395,6 +422,7 @@ static int amc_pci_probe(
         .major = major,
         .minor = minor,
     };
+    pci_set_drvdata(pdev, amc_priv);
     mutex_init(&amc_priv->locking.mutex);
     atomic_set(&amc_priv->refcount, 1);
     init_completion(&amc_priv->completion);
@@ -408,10 +436,17 @@ static int amc_pci_probe(
     rc = create_device_nodes(pdev, amc_priv, device_class);
     if (rc < 0)     goto no_cdev;
 
+    rc = sysfs_create_bin_file(&pdev->dev.kobj, &bin_attr_prom_used);
+    if (rc < 0) goto sysfs_error;
+
+    rc = sysfs_create_bin_file(&pdev->dev.kobj, &bin_attr_prom);
+    if (rc < 0) goto sysfs_error;
+
     return 0;
 
 
     destroy_device_nodes(amc_priv, device_class);
+sysfs_error:
 no_cdev:
     terminate_board(pdev);
 no_initialise:
@@ -446,6 +481,8 @@ static void amc_pci_remove(struct pci_dev *pdev)
     terminate_board(pdev);
     disable_board(pdev);
     release_board(amc_priv->board);
+    sysfs_remove_bin_file(&pdev->dev.kobj, &bin_attr_prom_used);
+    sysfs_remove_bin_file(&pdev->dev.kobj, &bin_attr_prom);
 
     kfree(amc_priv);
 }
