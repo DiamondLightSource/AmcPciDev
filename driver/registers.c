@@ -34,7 +34,7 @@ int amc_pci_reg_open(
     int rc = 0;
 
     TEST_OK(assign_reader_number(interrupts, &reader_number),
-        rc=-EIO, no_reader_slot, "No reader slot");
+        rc = -EIO, no_reader_slot, "No reader slot");
     struct register_context *context =
         kmalloc(sizeof(struct register_context), GFP_KERNEL);
     TEST_PTR(context, rc, no_context, "Unable to allocate register context");

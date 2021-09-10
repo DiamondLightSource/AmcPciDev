@@ -94,7 +94,7 @@ static int reset_dma_controller(struct dma_control *dma)
     int count = 0;
     int reset_stat = 0;
     while (
-        reset_stat=readl(&dma->regs->cdmacr),
+        reset_stat = readl(&dma->regs->cdmacr),
         (reset_stat & CDMACR_Reset) && time_before(jiffies, deadline))
     {
         count += 1;
@@ -112,7 +112,8 @@ static int reset_dma_controller(struct dma_control *dma)
 static int check_dma_status(struct dma_control *dma)
 {
     uint32_t status = readl(&dma->regs->cdmasr);
-    bool error = status & (CDMASR_DMADecErr | CDMASR_DMASlvErr | CDMASR_DMAIntErr);
+    bool error =
+        status & (CDMASR_DMADecErr | CDMASR_DMASlvErr | CDMASR_DMAIntErr);
     if (error) {
         printk(KERN_ERR "DMA error code: %08x\n", status);
         return -EIO;

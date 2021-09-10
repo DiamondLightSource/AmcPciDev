@@ -67,7 +67,7 @@ ssize_t read_prom(struct prom_context *context, char *buff, loff_t off,
     // offset and count should be multiple of 4 bytes
     loff_t off_al = off/4*4;
     size_t size = MIN(PROM_MAX_LENGTH - off_al, count);
-    for (int i = 0; i < size; i+=4)
+    for (int i = 0; i < size; i += 4)
     {
         u32 rval = ioread32(context->base + off_al + i);
         memcpy(buff + i, (char *) &rval, 4);
@@ -79,7 +79,8 @@ ssize_t read_prom(struct prom_context *context, char *buff, loff_t off,
 struct prom_context *load_prom(void __iomem *base)
 {
     int rc = 0;
-    struct prom_context *context = kzalloc(sizeof(struct prom_context), GFP_KERNEL);
+    struct prom_context *context =
+        kzalloc(sizeof(struct prom_context), GFP_KERNEL);
     TEST_PTR(context, rc, no_memory, "Unable to allocate PROM buffer");
 
     context->base = base;
@@ -114,10 +115,10 @@ struct prom_context *load_prom(void __iomem *base)
         ent_i < PROM_MAX_LENGTH - PROM_END_ENTRY_SIZE
             && context->buff[ent_i] == PROM_END_TAG
             && context->buff[ent_i + 1] == PROM_CHECKSUM_SIZE,
-        rc=-EIO, invalid_prom, "PROM end marker not found");
+        rc = -EIO, invalid_prom, "PROM end marker not found");
 
     context->data_len = ent_i + PROM_END_ENTRY_SIZE;
-    TEST_OK(validate_prom(context), rc=-EIO, invalid_prom,
+    TEST_OK(validate_prom(context), rc = -EIO, invalid_prom,
         "Invalid PROM data");
     return context;
 

@@ -213,7 +213,7 @@ static int create_device_nodes(
             {
                 struct prom_device_entry *device_entry =
                     (struct prom_device_entry *) pentry;
-                TEST_OK(!device_name, rc=-EINVAL, prom_error,
+                TEST_OK(!device_name, rc = -EINVAL, prom_error,
                     "Only one device entry is supported in PROM\n");
                 device_name = device_entry->name;
                 device_create(
@@ -223,7 +223,7 @@ static int create_device_nodes(
             }
             case PROM_DMA_TAG:
             {
-                TEST_OK(device_name, rc=-EINVAL, prom_error,
+                TEST_OK(device_name, rc = -EINVAL, prom_error,
                     "No device description found in PROM");
                 struct prom_dma_entry *dma_entry =
                     (struct prom_dma_entry *) pentry;
@@ -353,7 +353,8 @@ static int initialise_board(struct pci_dev *pdev, struct amc_pci *amc_priv)
     amc_priv->ctrl_memory = pci_iomap(pdev, 2, BAR2_LENGTH);
     TEST_PTR(amc_priv->ctrl_memory, rc, no_bar2, "Unable to map control BAR");
 
-    struct prom_context *prom_context = load_prom(amc_priv->ctrl_memory + PROM_OFFSET);
+    struct prom_context *prom_context =
+        load_prom(amc_priv->ctrl_memory + PROM_OFFSET);
     if (IS_ERR(prom_context)) {
         rc = PTR_ERR(prom_context);
         goto prom_error;
@@ -361,7 +362,7 @@ static int initialise_board(struct pci_dev *pdev, struct amc_pci *amc_priv)
 
     amc_priv->prom = prom_context;
 
-    TEST_OK(amc_priv->prom->nentries <= MAX_MINORS_PER_BOARD, rc=-E2BIG,
+    TEST_OK(amc_priv->prom->nentries <= MAX_MINORS_PER_BOARD, rc = -E2BIG,
         no_minor, "Device requires more minors than maximum allowed");
 
     rc = initialise_dma_control(

@@ -5,7 +5,8 @@
 struct interrupt_control;
 struct dma_control;
 
-bool assign_reader_number(struct interrupt_control *interrupts, int *reader_number);
+bool assign_reader_number(
+    struct interrupt_control *interrupts, int *reader_number);
 
 void unassign_reader_number(struct interrupt_control *interrupts,
     int reader_number);

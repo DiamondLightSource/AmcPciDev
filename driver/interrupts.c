@@ -48,7 +48,7 @@ struct interrupt_control {
 bool assign_reader_number(
     struct interrupt_control *interrupts, int *reader_number)
 {
-    for (int bit=0; bit < N_EVENT_READERS; bit++) {
+    for (int bit = 0; bit < N_EVENT_READERS; bit++) {
         if (!test_and_set_bit(bit, &interrupts->active_readers)) {
             // reset events for new readers
             atomic_set(&interrupts->events[bit], 0);
@@ -102,7 +102,7 @@ wait_queue_head_t *interrupts_wait_queue(struct interrupt_control *control)
 static void event_interrupt(struct interrupt_control *control, uint32_t events)
 {
     /* Add the new events into the current event masks. */
-    for (int reader=0; reader < N_EVENT_READERS; reader++)
+    for (int reader = 0; reader < N_EVENT_READERS; reader++)
          atomic_or(events, &control->events[reader]);
     /* Let any listeners know. */
     wake_up_all(&control->wait_queue);

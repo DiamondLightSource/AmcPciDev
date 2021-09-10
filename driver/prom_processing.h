@@ -13,9 +13,9 @@
 #define PROM_MAX_LENGTH 4096
 
 #define prom_for_each_entry(pos, context) \
-    for (pos=prom_first_entry(context); \
+    for (pos = prom_first_entry(context); \
         pos->tag != PROM_END_TAG; \
-        pos=prom_next_entry(pos))
+        pos = prom_next_entry(pos))
 
 #define PROM_ENTRY_HEAD              \
     struct __attribute__((packed)) { \

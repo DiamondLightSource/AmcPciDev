@@ -4,7 +4,7 @@ u16 calc_checksum16(char *buff, size_t size)
 {
     u32 result = 0;
     u16 *ptr = (u16 *) buff;
-    for (size_t i=0; i < size/2; i++) {
+    for (size_t i = 0; i < size/2; i++) {
         result += ptr[i];
     }
     if (size & 1)
