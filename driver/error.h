@@ -1,10 +1,10 @@
-#define DEVICE_NAME     "amc525_mbf"
+#define CLASS_NAME     "amc_pci"
 
 /* If test is false then do on_error, print message and goto target. */
 #define TEST_OK(test, on_error, target, message) \
     do if (unlikely(!(test))) { \
         on_error; \
-        printk(KERN_ERR DEVICE_NAME ": " message "\n"); \
+        printk(KERN_ERR CLASS_NAME ": " message "\n"); \
         goto target; \
     } while (0)
 

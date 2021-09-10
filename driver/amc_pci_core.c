@@ -308,7 +308,7 @@ static int enable_board(struct pci_dev *pdev)
     int rc = pci_enable_device(pdev);
     TEST_RC(rc, no_device, "Unable to enable AMC525\n");
 
-    rc = pci_request_regions(pdev, DEVICE_NAME);
+    rc = pci_request_regions(pdev, CLASS_NAME);
     TEST_RC(rc, no_regions, "Unable to reserve resources");
 
     rc = pci_set_dma_mask(pdev, DMA_BIT_MASK(64));
@@ -488,16 +488,16 @@ static void amc_pci_remove(struct pci_dev *pdev)
 }
 
 
-static struct pci_device_id amc525_pci_ids[] = {
+static struct pci_device_id amc_pci_ids[] = {
     { PCI_DEVICE_SUB(XILINX_VID, AMC525_DID, XILINX_VID, AMC525_SID) },
     { 0 }
 };
 
-MODULE_DEVICE_TABLE(pci, amc525_pci_ids);
+MODULE_DEVICE_TABLE(pci, amc_pci_ids);
 
 static struct pci_driver amc_pci_driver = {
-    .name = DEVICE_NAME,
-    .id_table = amc525_pci_ids,
+    .name = CLASS_NAME,
+    .id_table = amc_pci_ids,
     .probe = amc_pci_probe,
     .remove = amc_pci_remove,
 };
@@ -513,10 +513,10 @@ static int __init amc_pci_init(void)
     int rc = 0;
 
     /* Allocate major device number and create class. */
-    rc = alloc_chrdev_region(&device_major, 0, MAX_MINORS, DEVICE_NAME);
+    rc = alloc_chrdev_region(&device_major, 0, MAX_MINORS, CLASS_NAME);
     TEST_RC(rc, no_chrdev, "Unable to allocate dev region");
 
-    device_class = class_create(THIS_MODULE, DEVICE_NAME);
+    device_class = class_create(THIS_MODULE, CLASS_NAME);
     TEST_PTR(device_class, rc, no_class, "Unable to create class");
 
     rc = pci_register_driver(&amc_pci_driver);

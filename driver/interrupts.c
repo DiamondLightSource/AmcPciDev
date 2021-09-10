@@ -159,7 +159,7 @@ int initialise_interrupt_control(
     writel(0xFFFFFFFF, &intc->iar);     // Ensure no pending interrupts
     writel(0xFFFFFFFF, &intc->ier);     // Enable all interrupts
 
-    rc = request_irq(pdev->irq, amc_pci_isr, 0, DEVICE_NAME, control);
+    rc = request_irq(pdev->irq, amc_pci_isr, 0, CLASS_NAME, control);
     TEST_RC(rc, no_irq, "Unable to request irq");
 
     /* Put the controller in normal operating mode. */

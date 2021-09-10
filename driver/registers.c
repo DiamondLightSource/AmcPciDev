@@ -92,7 +92,7 @@ static int amc_pci_reg_mmap(struct file *file, struct vm_area_struct *vma)
     unsigned long end = (vma->vm_pgoff << PAGE_SHIFT) + size;
     if (end > context->length)
     {
-        printk(KERN_WARNING DEVICE_NAME " map area out of range\n");
+        printk(KERN_WARNING CLASS_NAME " map area out of range\n");
         return -EINVAL;
     }
 
@@ -113,12 +113,12 @@ static long lock_register(struct register_context *context)
     mutex_lock(&locking->mutex);
     if (locking->reference_count > 1)
     {
-        printk(KERN_WARNING DEVICE_NAME " device too busy to lock\n");
+        printk(KERN_WARNING CLASS_NAME " device too busy to lock\n");
         rc = -EBUSY;
     }
     else if (locking->locked_by)
     {
-        printk(KERN_WARNING DEVICE_NAME " device already locked\n");
+        printk(KERN_WARNING CLASS_NAME " device already locked\n");
         rc = -EBUSY;
     }
     else
@@ -139,7 +139,7 @@ static long unlock_register(struct register_context *context)
         locking->locked_by = NULL;
     else
     {
-        printk(KERN_WARNING DEVICE_NAME " device not locked by caller\n");
+        printk(KERN_WARNING CLASS_NAME " device not locked by caller\n");
         rc = -EINVAL;
     }
     mutex_unlock(&locking->mutex);
