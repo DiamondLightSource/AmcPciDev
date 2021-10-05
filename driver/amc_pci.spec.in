@@ -7,7 +7,7 @@ Group: System Environment/Kernel
 BuildRoot: %{_tmppath}/%{name}-%{version}-root
 BuildArch: noarch
 Requires: dkms
-Requires: python
+Requires: python3
 Requires: udev
 Conflicts: amc525_mbf
 Packager: Michael Abbott <michael.abbott@diamond.ac.uk>
@@ -18,6 +18,10 @@ Packager: Michael Abbott <michael.abbott@diamond.ac.uk>
 
 # Prevents error from unpackaged files created by rpm-build
 %define _unpackaged_files_terminate_build 0
+
+%if 0%{?rhel} == 8
+%define __brp_mangle_shebangs /usr/bin/true
+%endif
 
 %description
 Installs the kernel driver for interfacing to the firmware running
