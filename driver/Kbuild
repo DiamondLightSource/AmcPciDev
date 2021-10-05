@@ -42,11 +42,13 @@ $(obj)/default_prom.c: $(src)/default_prom.config $(src)/tools
 	$(src)/tools/prom_data_creator.py --format c $< >> $@
 
 
+ifndef NO_TESTS
 ifneq ($(CONFIG_KUNIT),)
 obj-m += amc_pci_test.o
 amc_pci_test-objs += prom_processing.o
 amc_pci_test-objs += prom_processing_test.o
 amc_pci_test-objs += utils.o
+endif
 endif
 
 # vim: set filetype=make:

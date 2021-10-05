@@ -1,8 +1,7 @@
 # This makefile is designed to be called from dkms: it builds in place.
+# This makefile should only be called from dkms as defined in dkms.conf.in
 
-# We expect dkms to set this variable (see dkms.conf), but to help with
-# standalone building we set a default if it's not already been set.
-KERNEL_DIR ?= /lib/modules/$(kernelver)/build
+# Must define KERNEL_DIR and VERSION before calling this
 
 amc_pci.ko:
-	make -C $(KERNEL_DIR) M=$(CURDIR) modules
+	make -C $(KERNEL_DIR) M=$(CURDIR) NO_TESTS=1 modules
