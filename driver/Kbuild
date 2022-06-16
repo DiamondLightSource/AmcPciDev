@@ -39,7 +39,7 @@ $(obj)/prom_processing.o: $(src)/prom_processing.c $(obj)/default_prom.c
 
 $(obj)/default_prom.c: $(src)/default_prom.config $(src)/tools
 	echo -n 'static const char default_prom[] = ' > $@
-	$(src)/tools/prom_data_creator.py --format c $< >> $@
+	python $(src)/tools/prom_data_creator.py --format c $< >> $@
 
 
 ifndef NO_TESTS
@@ -50,5 +50,4 @@ amc_pci_test-objs += prom_processing_test.o
 amc_pci_test-objs += utils.o
 endif
 endif
-
 # vim: set filetype=make:
