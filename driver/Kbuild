@@ -42,7 +42,7 @@ $(obj)/default_prom.c: $(src)/default_prom.config $(src)/tools
 	python $(src)/tools/prom_data_creator.py --format c $< >> $@
 
 
-ifndef NO_TESTS
+ifneq ($(KUNITTEST),)
 ifneq ($(CONFIG_KUNIT),)
 obj-m += amc_pci_test.o
 amc_pci_test-objs += prom_processing.o
