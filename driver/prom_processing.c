@@ -8,7 +8,6 @@
 #define PROM_NAME_MAX_LENGTH    256
 #define PROM_FIRST_ENTRY_OFFSET 5
 #define PROM_VERSION_OFFSET     4
-#define PROM_END_ENTRY_SIZE     (sizeof(struct prom_end_entry))
 #define PROM_CHECKSUM_SIZE      2
 
 
@@ -109,15 +108,17 @@ struct prom_context *load_prom(void __iomem *base)
         context->nentries++;
     }
 
+    context->data_len = ent_i + context->buff[ent_i + 1] + 2;
+
     // At this point we've either run off the end of memory, or we're sitting
     // on a putative end marker
     TEST_OK(
-        ent_i < PROM_MAX_LENGTH - PROM_END_ENTRY_SIZE
-            && context->buff[ent_i] == PROM_END_TAG
-            && context->buff[ent_i + 1] == PROM_CHECKSUM_SIZE,
+        context->data_len < PROM_MAX_LENGTH &&
+        context->buff[ent_i] == PROM_END_TAG &&
+        (context->buff[ent_i + 1] == PROM_CHECKSUM_SIZE ||
+         context->buff[ent_i + 1] == PROM_CHECKSUM_SIZE + 1),
         rc = -EIO, invalid_prom, "PROM end marker not found");
 
-    context->data_len = ent_i + PROM_END_ENTRY_SIZE;
     TEST_OK(validate_prom(context), rc = -EIO, invalid_prom,
         "Invalid PROM data");
     return context;

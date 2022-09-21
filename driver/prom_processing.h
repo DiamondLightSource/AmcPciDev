@@ -51,7 +51,7 @@ struct __attribute__((packed)) prom_dma_entry {
 
 struct __attribute__((packed)) prom_end_entry {
     PROM_ENTRY_HEAD;
-    u16 checksum;
+    char checksum[];
 };
 
 ssize_t read_prom(struct prom_context *context, char *buff, loff_t off,
