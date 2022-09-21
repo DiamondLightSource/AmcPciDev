@@ -40,6 +40,10 @@ struct __attribute__((packed)) prom_device_entry {
     char name[];
 };
 
+// Extract from GCC documentation 6.35 Specifying Attributes of Variables
+//    The packed attribute specifies that a variable or structure field should
+//    have the smallest possible alignment—one byte for a variable, and one bit
+//    for a field, unless you specify a larger value with the aligned attribute.
 struct __attribute__((packed)) prom_dma_entry {
     PROM_ENTRY_HEAD;
     u64 base : 48;
