@@ -92,7 +92,12 @@ def checksum(content):
 def dump_end(content=None):
     # if content is passed it will add a checksum
     if content:
-        return b"\x00\x02" + struct.pack("<H", checksum(content + b"\x00\x02"))
+        if len(content) % 2:
+            return b"\x00\x03\x00" + \
+                struct.pack("<H", checksum(content + b"\x00\x03\x00"))
+        else:
+            return b"\x00\x02" + \
+                struct.pack("<H", checksum(content + b"\x00\x02"))
     return b"\x00\x00"
 
 
@@ -143,6 +148,8 @@ def main():
     else:
         output = dump_c(bin_data)
         print(output, end="")
+
+    assert(check_checksum(bin_data))
 
 
 if __name__ == "__main__":
