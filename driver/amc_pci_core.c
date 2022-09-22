@@ -367,9 +367,11 @@ static int initialise_board(struct pci_dev *pdev, struct amc_pci *amc_priv)
     TEST_OK(amc_priv->prom->nentries <= MAX_MINORS_PER_BOARD, rc = -E2BIG,
         no_minor, "Device requires more minors than maximum allowed");
 
-    rc = initialise_dma_control(
-        pdev, amc_priv->ctrl_memory + CDMA_OFFSET, &amc_priv->dma);
-    if (rc < 0)  goto no_dma;
+    if (amc_priv->prom->has_dma) {
+        rc = initialise_dma_control(
+            pdev, amc_priv->ctrl_memory + CDMA_OFFSET, &amc_priv->dma);
+        if (rc < 0)  goto no_dma;
+    }
 
     rc = initialise_interrupt_control(
         pdev, amc_priv->ctrl_memory + INTC_OFFSET, amc_priv->dma,
@@ -380,7 +382,8 @@ static int initialise_board(struct pci_dev *pdev, struct amc_pci *amc_priv)
 
     terminate_interrupt_control(pdev, amc_priv->interrupts);
 no_irq:
-    terminate_dma_control(amc_priv->dma);
+    if (amc_priv->prom->has_dma)
+        terminate_dma_control(amc_priv->dma);
 no_minor:
     release_prom_context(prom_context);
 no_dma:
@@ -395,9 +398,10 @@ static void terminate_board(struct pci_dev *pdev)
 {
     struct amc_pci *amc_priv = pci_get_drvdata(pdev);
     terminate_interrupt_control(pdev, amc_priv->interrupts);
-    terminate_dma_control(amc_priv->dma);
-    pci_iounmap(pdev, amc_priv->ctrl_memory);
+    if (amc_priv->prom->has_dma)
+        terminate_dma_control(amc_priv->dma);
     release_prom_context(amc_priv->prom);
+    pci_iounmap(pdev, amc_priv->ctrl_memory);
 }
 
 

@@ -104,6 +104,9 @@ struct prom_context *load_prom(void __iomem *base)
     int ent_i = PROM_FIRST_ENTRY_OFFSET;
     while (ent_i < PROM_MAX_LENGTH && context->buff[ent_i] != PROM_END_TAG)
     {
+        if (context->buff[ent_i] == PROM_DMA_TAG)
+            context->has_dma = true;
+
         ent_i += context->buff[ent_i + 1] + 2;
         context->nentries++;
     }

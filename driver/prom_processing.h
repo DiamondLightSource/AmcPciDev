@@ -27,6 +27,7 @@ struct prom_context {
     void __iomem *base;
     unsigned char buff[PROM_MAX_LENGTH + 1];
     size_t data_len;
+    bool has_dma;
     size_t nentries;
 };
 

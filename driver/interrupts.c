@@ -122,7 +122,7 @@ static irqreturn_t amc_pci_isr(int ireq, void *context)
     writel(isr, &intc->iar);
 
     /* Interrupt number 1 belongs to the DMA engine. */
-    if (isr & 1)
+    if (isr & 1  &&  control->dma)
         dma_interrupt(control->dma);
 
     /* The remaining interrupts are handed on to the event source. */
