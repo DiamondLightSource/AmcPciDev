@@ -3,3 +3,12 @@
 
 # Support default build directory
 /build
+
+# Python related
+__pycache__
+*.pyc
+
+# Module build output
+*.o
+*.ko
+*.mod
