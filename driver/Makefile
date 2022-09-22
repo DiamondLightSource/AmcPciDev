@@ -4,4 +4,4 @@
 # Must define KERNEL_DIR and VERSION before calling this
 
 amc_pci.ko:
-	make -C $(KERNEL_DIR) M=$(CURDIR) NO_TESTS=1 modules
+	make -C $(KERNEL_DIR) M=$(CURDIR) modules

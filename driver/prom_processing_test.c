@@ -3,6 +3,12 @@
 #include "test_assets/test_prom1.c"
 
 
+static u64 base_to_u64(u16 *base)
+{
+    return (u64) base[0] | (u64) base[1] << 16 | (u64) base[2] << 32;
+}
+
+
 static void test_load_prom_validation_ok(struct kunit *test)
 {
     struct prom_context *context = load_prom((void *) test_prom1);
@@ -49,21 +55,21 @@ static void test_prom_next_entry(struct kunit *test) {
     struct prom_dma_entry *dma_entry = (struct prom_dma_entry *) entry;
     KUNIT_EXPECT_EQ(test, (u8) PROM_DMA_TAG, dma_entry->tag);
     KUNIT_EXPECT_EQ(test, 0, memcmp(dma_entry->name, "memA", 4));
-    KUNIT_EXPECT_TRUE(test, dma_entry->base == 0);
+    KUNIT_EXPECT_TRUE(test, base_to_u64(dma_entry->base) == 0);
     KUNIT_EXPECT_EQ(test, (u32) 0x12131415, dma_entry->length);
     KUNIT_EXPECT_EQ(test, (u8) 4, dma_entry->perm);
     entry = prom_next_entry(entry);
     dma_entry = (struct prom_dma_entry *) entry;
     KUNIT_EXPECT_EQ(test, (u8) PROM_DMA_TAG, dma_entry->tag);
     KUNIT_EXPECT_EQ(test, 0, memcmp(dma_entry->name, "memB", 4));
-    KUNIT_EXPECT_TRUE(test, dma_entry->base == 0xabcd11223344);
+    KUNIT_EXPECT_TRUE(test, base_to_u64(dma_entry->base) == 0xabcd11223344);
     KUNIT_EXPECT_EQ(test, (u32) 0x8912345, dma_entry->length);
     KUNIT_EXPECT_EQ(test, (u8) 2, dma_entry->perm);
     entry = prom_next_entry(entry);
     dma_entry = (struct prom_dma_entry *) entry;
     KUNIT_EXPECT_EQ(test, (u8) PROM_DMA_TAG, dma_entry->tag);
     KUNIT_EXPECT_EQ(test, 0, memcmp(dma_entry->name, "memC", 4));
-    KUNIT_EXPECT_TRUE(test,  dma_entry->base == 0x42616263);
+    KUNIT_EXPECT_TRUE(test,  base_to_u64(dma_entry->base) == 0x42616263);
     KUNIT_EXPECT_EQ(test, (u32) 0x100, dma_entry->length);
     KUNIT_EXPECT_EQ(test, (u8) 6, dma_entry->perm);
     entry = prom_next_entry(entry);
@@ -78,13 +84,13 @@ static void test_prom_find_entry_available(struct kunit *test) {
         (struct prom_dma_entry *) prom_find_entry(context, 2);
     KUNIT_EXPECT_EQ(test, (u8) PROM_DMA_TAG, dma_entry->tag);
     KUNIT_EXPECT_EQ(test, 0, memcmp(dma_entry->name, "memB", 4));
-    KUNIT_EXPECT_TRUE(test, dma_entry->base == 0xabcd11223344);
+    KUNIT_EXPECT_TRUE(test, base_to_u64(dma_entry->base) == 0xabcd11223344);
     KUNIT_EXPECT_EQ(test, (u32) 0x8912345, dma_entry->length);
     KUNIT_EXPECT_EQ(test, (u8) 2, dma_entry->perm);
     dma_entry = (struct prom_dma_entry *) prom_find_entry(context, 3);
     KUNIT_EXPECT_EQ(test, (u8) PROM_DMA_TAG, dma_entry->tag);
     KUNIT_EXPECT_EQ(test, 0, memcmp(dma_entry->name, "memC", 4));
-    KUNIT_EXPECT_TRUE(test,  dma_entry->base == 0x42616263);
+    KUNIT_EXPECT_TRUE(test,  base_to_u64(dma_entry->base) == 0x42616263);
     KUNIT_EXPECT_EQ(test, (u32) 0x100, dma_entry->length);
     KUNIT_EXPECT_EQ(test, (u8) 6, dma_entry->perm);
     release_prom_context(context);
