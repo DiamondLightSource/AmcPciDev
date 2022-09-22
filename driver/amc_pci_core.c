@@ -130,6 +130,7 @@ static int amc_pci_open(struct inode *inode, struct file *file)
      * so we'll copy the appropriate link to our file structure. */
     struct cdev *cdev = inode->i_cdev;
     struct amc_pci *amc_priv = container_of(cdev, struct amc_pci, cdev);
+    u64 base;
 
     /* Check that the file handle is still live. */
     if (!atomic_inc_not_zero(&amc_priv->refcount))
@@ -165,9 +166,11 @@ static int amc_pci_open(struct inode *inode, struct file *file)
                 else
                 {
                     file->f_op = &amc_pci_dma_fops;
+                    base = (u64) dma_entry->base[0] |
+                        (u64) dma_entry->base[1] << 16 |
+                        (u64) dma_entry->base[2] << 32;
                     rc = amc_pci_dma_open(
-                        file, amc_priv->dma, dma_entry->base,
-                        dma_entry->length);
+                        file, amc_priv->dma, base, dma_entry->length);
                 }
                 break;
             }
