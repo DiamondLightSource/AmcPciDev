@@ -1,6 +1,7 @@
 /* Implements access to memory via dma. */
 
 #include <linux/pci.h>
+#include <linux/dma-mapping.h>
 #include <linux/delay.h>
 #include <linux/module.h>
 
@@ -180,8 +181,8 @@ ssize_t read_dma_memory(
     *buffer = dma->buffer + start_offset;
 
     /* Hand the buffer over to the DMA engine. */
-    pci_dma_sync_single_for_device(
-        dma->pdev, dma->buffer_dma, dma->buffer_size,  DMA_FROM_DEVICE);
+    dma_sync_single_for_device(
+        &dma->pdev->dev, dma->buffer_dma, dma->buffer_size,  DMA_FROM_DEVICE);
 
     /* Reset the DMA engine if necessary. */
     rc = (ssize_t) maybe_reset_dma(dma);
@@ -205,8 +206,8 @@ ssize_t read_dma_memory(
 
     /* Restore the buffer to CPU access (really just flushes associated cache
      * entries). */
-    pci_dma_sync_single_for_cpu(
-        dma->pdev, dma->buffer_dma, dma->buffer_size,  DMA_FROM_DEVICE);
+    dma_sync_single_for_cpu(
+        &dma->pdev->dev, dma->buffer_dma, dma->buffer_size,  DMA_FROM_DEVICE);
 
     rc = check_dma_status(dma);
     if (rc)
@@ -260,9 +261,9 @@ int initialise_dma_control(
     TEST_PTR(dma->buffer, rc, no_buffer, "Unable to allocate DMA buffer");
 
     /* Get the associated DMA address for the buffer. */
-    dma->buffer_dma = pci_map_single(
-        pdev, dma->buffer, dma->buffer_size, DMA_FROM_DEVICE);
-    TEST_OK(!pci_dma_mapping_error(pdev, dma->buffer_dma),
+    dma->buffer_dma = dma_map_single(
+        &pdev->dev, dma->buffer, dma->buffer_size, DMA_FROM_DEVICE);
+    TEST_OK(!dma_mapping_error(&pdev->dev, dma->buffer_dma),
         rc = -EIO, no_dma_map, "Unable to map DMA buffer");
 
     /* Final initialisation, now ready to run. */
@@ -275,7 +276,8 @@ int initialise_dma_control(
 
 
 reset_error:
-    pci_unmap_single(pdev, dma->buffer_dma, dma->buffer_size, DMA_FROM_DEVICE);
+    dma_unmap_single(
+        &pdev->dev, dma->buffer_dma, dma->buffer_size, DMA_FROM_DEVICE);
 no_dma_map:
     free_pages((unsigned long) dma->buffer, dma->buffer_shift - PAGE_SHIFT);
 no_buffer:
@@ -287,8 +289,8 @@ no_memory:
 
 void terminate_dma_control(struct dma_control *dma)
 {
-    pci_unmap_single(
-        dma->pdev, dma->buffer_dma, dma->buffer_size, DMA_FROM_DEVICE);
+    dma_unmap_single(
+        &dma->pdev->dev, dma->buffer_dma, dma->buffer_size, DMA_FROM_DEVICE);
     free_pages((unsigned long) dma->buffer, dma->buffer_shift - PAGE_SHIFT);
     kfree(dma);
 }

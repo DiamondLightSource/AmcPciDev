@@ -18,6 +18,7 @@ EXTRA_CFLAGS += -Wno-unused-parameter
 EXTRA_CFLAGS += -Wno-missing-field-initializers
 EXTRA_CFLAGS += -Wno-empty-body
 EXTRA_CFLAGS += -Wno-sign-compare
+EXTRA_CFLAGS += -Wno-type-limits
 
 EXTRA_CFLAGS += -DVERSION=$(VERSION)
 
