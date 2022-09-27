@@ -114,7 +114,7 @@ def process_config_file(path):
     bin_data = bytearray()
     with open(path, "r") as fhandle:
         for line in fhandle:
-            if line.startswith("#"):
+            if line.startswith("#") or line[0] == '\n':
                 continue
             raw_field, raw_value = line.split(":", 1)
             field, value = raw_field.strip().lower(), raw_value.strip()
