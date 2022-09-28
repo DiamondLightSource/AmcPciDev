@@ -112,6 +112,8 @@ static long amc_pci_mem_ioctl(
     {
         case AMC_BUF_SIZE:
             return dma_buffer_size(context->dma);
+        case AMC_DMA_AREA_SIZE:
+            return context->length;
         default:
             return -EINVAL;
     }

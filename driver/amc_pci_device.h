@@ -14,3 +14,6 @@
 
 /* Returns size of DMA buffer. */
 #define AMC_BUF_SIZE        AMC_IOCTL(1)
+
+/* Returns total size of DMA area. */
+#define AMC_DMA_AREA_SIZE   AMC_IOCTL(4)
