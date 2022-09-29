@@ -36,7 +36,8 @@ struct prom_entry *prom_find_entry(struct prom_context *context, int index)
 {
     int i = 0;
     struct prom_entry *pentry;
-    prom_for_each_entry(pentry, context) {
+    prom_for_each_entry(pentry, context)
+    {
         if (i == index)
             return pentry;
         i++;

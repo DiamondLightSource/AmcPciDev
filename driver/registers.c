@@ -183,8 +183,8 @@ static ssize_t amc_pci_reg_read(
         return -EIO;
 
     uint32_t events;
-    int rc = read_interrupt_events(context->interrupts, no_wait, &events,
-                                   context->reader_number);
+    int rc = read_interrupt_events(
+        context->interrupts, no_wait, &events, context->reader_number);
     if (rc < 0)
         /* Read was interrupted. */
         return rc;

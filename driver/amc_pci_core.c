@@ -358,7 +358,8 @@ static int initialise_board(struct pci_dev *pdev, struct amc_pci *amc_priv)
 
     struct prom_context *prom_context =
         load_prom(amc_priv->ctrl_memory + PROM_OFFSET);
-    if (IS_ERR(prom_context)) {
+    if (IS_ERR(prom_context))
+    {
         rc = PTR_ERR(prom_context);
         goto prom_error;
     }
@@ -368,7 +369,8 @@ static int initialise_board(struct pci_dev *pdev, struct amc_pci *amc_priv)
     TEST_OK(amc_priv->prom->nentries <= MAX_MINORS_PER_BOARD, rc = -E2BIG,
         no_minor, "Device requires more minors than maximum allowed");
 
-    if (amc_priv->prom->has_dma) {
+    if (amc_priv->prom->has_dma)
+    {
         rc = initialise_dma_control(
             pdev, amc_priv->ctrl_memory + CDMA_OFFSET, &amc_priv->dma);
         if (rc < 0)  goto no_dma;

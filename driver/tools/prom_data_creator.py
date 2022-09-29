@@ -103,8 +103,9 @@ def dump_end(content=None):
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--format", choices=["coe", "c", "bin"], default="coe",
-                        help="Output format")
+    parser.add_argument(
+        "--format", choices=["coe", "c", "bin"], default="coe",
+        help="Output format")
     parser.add_argument("config_path")
     args = parser.parse_args()
     return args
@@ -125,10 +126,9 @@ def process_config_file(path):
             elif field == "dma":
                 name, perm, base, length = value.split()
                 bin_data.extend(
-                    dump_memory_description(DMA_TAG, name,
-                                            int_hex(base),
-                                            int_hex(length),
-                                            perm_flag(perm)))
+                    dump_memory_description(
+                        DMA_TAG, name,
+                        int_hex(base), int_hex(length), perm_flag(perm)))
 
     bin_data.extend(dump_end(bytes(bin_data)))
     return bin_data

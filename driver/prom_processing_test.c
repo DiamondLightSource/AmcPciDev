@@ -48,7 +48,8 @@ static void test_prom_first_entry(struct kunit *test)
 }
 
 
-static void test_prom_next_entry(struct kunit *test) {
+static void test_prom_next_entry(struct kunit *test)
+{
     struct prom_context *context = load_prom((void *) test_prom1);
     struct prom_entry *entry = prom_first_entry(context);
     entry = prom_next_entry(entry);
@@ -78,7 +79,8 @@ static void test_prom_next_entry(struct kunit *test) {
 }
 
 
-static void test_prom_find_entry_available(struct kunit *test) {
+static void test_prom_find_entry_available(struct kunit *test)
+{
     struct prom_context *context = load_prom((void *) test_prom1);
     struct prom_dma_entry *dma_entry =
         (struct prom_dma_entry *) prom_find_entry(context, 2);
@@ -97,7 +99,8 @@ static void test_prom_find_entry_available(struct kunit *test) {
 }
 
 
-static void test_prom_find_entry_missing(struct kunit *test) {
+static void test_prom_find_entry_missing(struct kunit *test)
+{
     struct prom_context *context = load_prom((void *) test_prom1);
     struct prom_entry *entry = prom_find_entry(context, 4);
     KUNIT_EXPECT_PTR_EQ(test, (struct prom_entry *) NULL, entry);

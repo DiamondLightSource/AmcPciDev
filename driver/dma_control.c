@@ -115,14 +115,13 @@ static int check_dma_status(struct dma_control *dma)
     uint32_t status = readl(&dma->regs->cdmasr);
     bool error =
         status & (CDMASR_DMADecErr | CDMASR_DMASlvErr | CDMASR_DMAIntErr);
-    if (error) {
+    if (error)
+    {
         printk(KERN_ERR "DMA error code: %08x\n", status);
         return -EIO;
     }
     else
-    {
         return 0;
-    }
 }
 
 

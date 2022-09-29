@@ -48,8 +48,10 @@ struct interrupt_control {
 bool assign_reader_number(
     struct interrupt_control *interrupts, int *reader_number)
 {
-    for (int bit = 0; bit < N_EVENT_READERS; bit++) {
-        if (!test_and_set_bit(bit, &interrupts->active_readers)) {
+    for (int bit = 0; bit < N_EVENT_READERS; bit++)
+    {
+        if (!test_and_set_bit(bit, &interrupts->active_readers))
+        {
             // reset events for new readers
             atomic_set(&interrupts->events[bit], 0);
             *reader_number = bit;
