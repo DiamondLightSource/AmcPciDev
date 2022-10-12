@@ -74,6 +74,7 @@ install -m 0644 %{_curdir}/11-amc_pci.rules              %{buildroot}%{udevdir}
 %{dkmsdir}/prom_processing.c
 %{dkmsdir}/prom_processing.h
 %{dkmsdir}/default_prom.config
+%{dkmsdir}/tools/
 %{dkmsdir}/tools/prom_data_creator.py
 %{dkmsdir}/utils.c
 %{dkmsdir}/utils.h
