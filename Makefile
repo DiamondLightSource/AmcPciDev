@@ -16,8 +16,6 @@ INSTALL_TARGETS = $(DEFAULT_TARGETS)
 
 include Makefile.common
 
-include VERSION
-
 
 MAKE_LOCAL = \
     $(MAKE) -C $< -f $(TOP)/$1/Makefile.local TOP=$(TOP) $@
@@ -56,13 +54,3 @@ clean-%:
 clean: $(DIR_TARGETS:%=clean-%)
 	rm -rf $(BUILD_DIR)
 .PHONY: clean
-
-
-print_version:
-	@echo VERSION_EXTRA=$(VERSION_EXTRA)
-	@echo VERSION_MAJOR=$(VERSION_MAJOR)
-	@echo VERSION_MINOR=$(VERSION_MINOR)
-	@echo VERSION_PATCH=$(VERSION_PATCH)
-	@echo GIT_VERSION=$(GIT_VERSION)
-	@echo AMC_PCI_DEV_VERSION=$(VERSION)
-.PHONY: print_version

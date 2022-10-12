@@ -11,12 +11,13 @@ kernelver = $(shell uname -r)
 KERNEL_DIR = /lib/modules/$(kernelver)/build
 
 include $(TOP)/Makefile.common
-include $(TOP)/VERSION
 
 SRCDIR = $(TOP)/driver
 KBUILD_DIR = $(CURDIR)/kbuild-$(kernelver)
 
 DRIVER_NAME = amc_pci
+
+GIT_VERSION = $(shell git describe --abbrev=7 --dirty --always --tags)
 
 # We use two separate version strings for the driver.  The DRV_VERSION string
 # contains the full version information and is used in the driver version string
@@ -25,8 +26,8 @@ DRIVER_NAME = amc_pci
 # and follows the Red Hat versioning rules: only letters, digits, and periods.
 # See https://fedoraproject.org/wiki/Packaging:Versioning for information on RPM
 # versioning.  We'll want to obey these rules if we can.
-DRV_VERSION = $(VERSION)$(VERSION_EXTRA)-$(GIT_VERSION)
-RPM_VERSION = $(VERSION)
+DRV_VERSION = $(GIT_VERSION)
+RPM_VERSION = $(shell echo -n '$(GIT_VERSION)' | tr -c 'a-zA-Z0-9.' '.')
 
 
 # Default target is to build the driver
@@ -98,7 +99,7 @@ VERSION_SUBST = \
     's/@@DRV_VERSION@@/$(DRV_VERSION)/;s/@@RPM_VERSION@@/$(RPM_VERSION)/'
 
 # We substitute the version information into dkms.conf
-dkms.conf: dkms.conf.in $(TOP)/VERSION
+dkms.conf: dkms.conf.in
 	sed $(VERSION_SUBST) $< >$@
 
 # Install files where dkms needs them.  Supports DESTDIR for local install
@@ -132,7 +133,7 @@ remove-dkms:
 
 RPM_FILE = amc_pci-$(RPM_VERSION)-1dkms.noarch.rpm
 
-amc_pci.spec: amc_pci.spec.in $(TOP)/VERSION
+amc_pci.spec: amc_pci.spec.in
 	sed s/@@VERSION@@/$(RPM_VERSION)/g $< >$@
 
 driver-rpm: dkms.conf amc_pci.spec 11-amc_pci.rules
