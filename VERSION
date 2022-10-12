@@ -1,8 +1,8 @@
 # This file contains the global version definition for the AmcPciDev project.
 
-VERSION_EXTRA = -dev
-VERSION_MAJOR = 0
-VERSION_MINOR = 0
+VERSION_EXTRA =
+VERSION_MAJOR = 1
+VERSION_MINOR = 1
 VERSION_PATCH = 0
 
 # Compute the git version string
