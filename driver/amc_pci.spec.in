@@ -12,9 +12,10 @@ Requires: udev
 Conflicts: amc525_mbf
 Packager: Michael Abbott <michael.abbott@diamond.ac.uk>
 
-# The two target directories
+# The target directories
 %define dkmsdir /usr/src/%{name}-%{version}
 %define udevdir /etc/udev/rules.d
+%define dracutdir  /etc/dracutdir.conf.d
 
 # Prevents error from unpackaged files created by rpm-build
 %define _unpackaged_files_terminate_build 0
@@ -55,6 +56,7 @@ install -m 0644 %{_sourcedir}/Makefile                   %{buildroot}%{dkmsdir}
 install -m 0644 %{_sourcedir}/Kbuild                     %{buildroot}%{dkmsdir}
 install -m 0644 %{_curdir}/dkms.conf                     %{buildroot}%{dkmsdir}
 install -m 0644 %{_curdir}/11-amc_pci.rules              %{buildroot}%{udevdir}
+install -m 0644 %{_sourcedir}/amc_pci.conf               %{buildroot}%{dracutdir}
 
 %files
 %{dkmsdir}/amc_pci_core.c
@@ -82,6 +84,7 @@ install -m 0644 %{_curdir}/11-amc_pci.rules              %{buildroot}%{udevdir}
 %{dkmsdir}/Kbuild
 %{dkmsdir}/dkms.conf
 %{udevdir}/11-amc_pci.rules
+%{dracutdir}/amc_pci.conf
 
 %post
 dkms add     -m %{name} -v %{version} --rpm_safe_upgrade
