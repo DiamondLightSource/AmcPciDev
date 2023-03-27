@@ -30,7 +30,7 @@ on an AMC525 FPGA card.  The driver is installed using dkms.
 
 %install
 rm -rf %{buildroot}
-mkdir -p %{buildroot}%{dkmsdir} %{buildroot}%{udevdir}
+mkdir -p %{buildroot}%{dkmsdir} %{buildroot}%{udevdir} %{buildroot}%{dracutdir}
 install -m 0644 %{_sourcedir}/amc_pci_core.c             %{buildroot}%{dkmsdir}
 install -m 0644 %{_sourcedir}/amc_pci_core.h             %{buildroot}%{dkmsdir}
 install -m 0644 %{_sourcedir}/amc_pci_device.h           %{buildroot}%{dkmsdir}
