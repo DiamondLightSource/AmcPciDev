@@ -121,16 +121,20 @@ static irqreturn_t amc_pci_isr(int ireq, void *context)
     /* Ask the interrupt controller for the active interrupts and acknowlege the
      * ones we've seen. */
     uint32_t isr = readl(&intc->isr);
-    writel(isr, &intc->iar);
 
     /* Interrupt number 1 belongs to the DMA engine. */
     if (isr & 1  &&  control->dma)
         dma_interrupt(control->dma);
 
     /* The remaining interrupts are handed on to the event source. */
-    isr >>= 1;
-    if (isr)
-        event_interrupt(control, isr);
+    uint32_t user_isr = isr >> 1;
+    if (user_isr)
+        event_interrupt(control, user_isr);
+
+    /* because the DMA interrupt is level-triggered, we need to do this
+     * after the interrupt condition is cleared in the DMA, otherwise, we
+     * woud get a spurious interrupt */
+    writel(isr, &intc->iar);
 
     return IRQ_HANDLED;
 }
