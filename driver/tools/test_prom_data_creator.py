@@ -36,20 +36,26 @@ def test_dump_device_description():
 def test_dump_memory_description():
     log.info("Testing raw data for read-only memory region")
     result = dump_memory_description(
-        DMA_TAG, "test_name", 0x801011121314, 0x91929394, READ_PERM)
+        "test_name", 0x801011121314, 0x91929394, READ_PERM)
     assert result == \
         b"\x02\x15\x14\x13\x12\x11\x10\x80\x94\x93\x92\x91\x04test_name\x00"
     log.info("Testing raw data for write-only memory region")
     result = dump_memory_description(
-        DMA_TAG, "test_name", 0x801011121314, 0x91929394, WRITE_PERM)
+        "test_name", 0x801011121314, 0x91929394, WRITE_PERM)
     assert result == \
         b"\x02\x15\x14\x13\x12\x11\x10\x80\x94\x93\x92\x91\x02test_name\x00"
     log.info("Testing raw data for readable and writable memory region")
     result = dump_memory_description(
-        DMA_TAG, "test_name", 0x801011121314, 0x91929394,
+        "test_name", 0x801011121314, 0x91929394,
         READ_PERM | WRITE_PERM)
     assert result == \
         b"\x02\x15\x14\x13\x12\x11\x10\x80\x94\x93\x92\x91\x06test_name\x00"
+    result = dump_memory_description(
+        "test_name", 0x0807060504030201, 0x090a0b0c,
+        READ_PERM | WRITE_PERM)
+    assert result == \
+        b"\x03\x17\x01\x02\x03\x04\x05\x06\x07\x08\x0c\x0b\x0a\x09\x06" \
+        b"test_name\x00"
 
 
 def test_check_checksum():
