@@ -6,6 +6,7 @@
 #define PROM_END_TAG            0
 #define PROM_DEVICE_TAG         1
 #define PROM_DMA_TAG            2
+#define PROM_DMA_EXT_TAG        3
 
 #define PROM_DMA_PERM_WRITE     2
 #define PROM_DMA_PERM_READ      4
@@ -44,6 +45,15 @@ struct __attribute__((packed)) prom_device_entry {
 struct __attribute__((packed)) prom_dma_entry {
     PROM_ENTRY_HEAD;
     u16 base[3];
+    u32 length;
+    u8 perm;
+    // assumed to be null terminated
+    char name[];
+};
+
+struct __attribute__((packed)) prom_dma_ext_entry {
+    PROM_ENTRY_HEAD;
+    u64 base;
     u32 length;
     u8 perm;
     // assumed to be null terminated

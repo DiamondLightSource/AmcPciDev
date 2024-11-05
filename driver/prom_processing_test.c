@@ -1,6 +1,7 @@
 #include <kunit/test.h>
 #include "prom_processing.h"
 #include "test_assets/test_prom1.c"
+#include "test_assets/test_prom2.c"
 
 
 static u64 base_to_u64(u16 *base)
@@ -108,6 +109,22 @@ static void test_prom_find_entry_missing(struct kunit *test)
 }
 
 
+static void test_prom_with_dma_ext_entry(struct kunit *test)
+{
+    struct prom_context *context = load_prom(
+        (void *) test_prom2);
+    KUNIT_EXPECT_NOT_ERR_OR_NULL(test, context);
+    struct prom_dma_ext_entry *dma_ext_entry =
+        (struct prom_dma_ext_entry *) prom_find_entry(context, 0);
+    KUNIT_EXPECT_EQ(test, (u8) PROM_DMA_EXT_TAG, dma_ext_entry->tag);
+    KUNIT_EXPECT_EQ(test, 0, memcmp(dma_ext_entry->name, "ddr0", 4));
+    KUNIT_EXPECT_TRUE(test, dma_ext_entry->base == 0x0807060504030201);
+    KUNIT_EXPECT_EQ(test, (u32) 0x090a0b0c, dma_ext_entry->length);
+    KUNIT_EXPECT_EQ(test, (u8) PROM_DMA_PERM_READ, dma_ext_entry->perm);
+    release_prom_context(context);
+}
+
+
 static struct kunit_case prom_processing_test_cases[] = {
     KUNIT_CASE(test_load_prom_validation_ok),
     KUNIT_CASE(test_load_prom_validation_fail),
@@ -116,6 +133,7 @@ static struct kunit_case prom_processing_test_cases[] = {
     KUNIT_CASE(test_prom_next_entry),
     KUNIT_CASE(test_prom_find_entry_available),
     KUNIT_CASE(test_prom_find_entry_missing),
+    KUNIT_CASE(test_prom_with_dma_ext_entry),
     {}
 };
 

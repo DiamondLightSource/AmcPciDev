@@ -174,6 +174,25 @@ static int amc_pci_open(struct inode *inode, struct file *file)
                 }
                 break;
             }
+            case PROM_DMA_EXT_TAG:
+            {
+                struct prom_dma_ext_entry *dma_entry =
+                    (struct prom_dma_ext_entry *) pentry;
+                if (dma_entry->perm != PROM_DMA_PERM_READ)
+                {
+                    printk(KERN_ERR
+                        "Driver only supports read operation for DMA target "
+                        "memory\n");
+                }
+                else
+                {
+                    file->f_op = &amc_pci_dma_fops;
+                    rc = amc_pci_dma_open(
+                        file, amc_priv->dma, dma_entry->base,
+                        dma_entry->length);
+                }
+                break;
+            }
             default:
                 printk(KERN_INFO "Unknown entry type found %02x\n",
                     pentry->tag);
@@ -228,11 +247,20 @@ static int create_device_nodes(
             {
                 TEST_OK(device_name, rc = -EINVAL, prom_error,
                     "No device description found in PROM");
-                struct prom_dma_entry *dma_entry =
-                    (struct prom_dma_entry *) pentry;
                 device_create(
                     device_class, &pdev->dev, MKDEV(major, minor + i), NULL,
-                    "%s.%d.%s", device_name, amc_priv->board, dma_entry->name);
+                    "%s.%d.%s", device_name, amc_priv->board,
+                    ((struct prom_dma_entry *) pentry)->name);
+                break;
+            }
+            case PROM_DMA_EXT_TAG:
+            {
+                TEST_OK(device_name, rc = -EINVAL, prom_error,
+                    "No device description found in PROM");
+                device_create(
+                    device_class, &pdev->dev, MKDEV(major, minor + i), NULL,
+                    "%s.%d.%s", device_name, amc_priv->board,
+                    ((struct prom_dma_ext_entry *) pentry)->name);
                 break;
             }
             default:
