@@ -342,7 +342,7 @@ static int enable_board(struct pci_dev *pdev)
     rc = pci_request_regions(pdev, CLASS_NAME);
     TEST_RC(rc, no_regions, "Unable to reserve resources");
 
-    rc = dma_set_mask(&pdev->dev, DMA_BIT_MASK(64));
+    rc = dma_set_mask(&pdev->dev, DMA_BIT_MASK(48));
     TEST_RC(rc, no_dma_mask, "Unable to set DMA mask");
 
     pci_set_master(pdev);
