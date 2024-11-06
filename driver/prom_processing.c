@@ -63,7 +63,7 @@ ssize_t read_prom(struct prom_context *context, char *buff, loff_t off,
     size_t count)
 {
     if (off > PROM_MAX_LENGTH)
-        return -EIO;
+        return -EINVAL;
     // offset and count should be multiple of 4 bytes
     loff_t off_al = off/4*4;
     size_t size = min(PROM_MAX_LENGTH - (size_t) off_al, count);
