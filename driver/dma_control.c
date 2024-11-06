@@ -188,7 +188,7 @@ ssize_t read_dma_memory(
     TEST_RC(rc, reset_error, "Failed to reset DMA");
 
     /* Configure the engine for transfer. */
-    writel((start >> 32) & 0xffff, &dma->regs->sa_msb);
+    writel((uint32_t) (start >> 32), &dma->regs->sa_msb);
     writel((uint32_t) dma_start, &dma->regs->sa);
     writel((uint32_t) dma->buffer_dma, &dma->regs->da);
     writel((uint32_t) (dma->buffer_dma >> 32), &dma->regs->da_msb);

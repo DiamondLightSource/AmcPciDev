@@ -94,7 +94,7 @@ static ssize_t prom_used_read(struct file *filp, struct kobject *kobj,
 {
     if (off > PROM_MAX_LENGTH)
         return -EINVAL;
-    size_t size = MIN(count, PROM_MAX_LENGTH - off);
+    size_t size = min(count, PROM_MAX_LENGTH - (size_t) off);
     struct pci_dev *pdev = to_pci_dev(kobj_to_dev(kobj));
     struct amc_pci *priv = pci_get_drvdata(pdev);
     memcpy(buff, priv->prom->buff + off, size);
@@ -174,6 +174,25 @@ static int amc_pci_open(struct inode *inode, struct file *file)
                 }
                 break;
             }
+            case PROM_DMA_EXT_TAG:
+            {
+                struct prom_dma_ext_entry *dma_entry =
+                    (struct prom_dma_ext_entry *) pentry;
+                if (dma_entry->perm != PROM_DMA_PERM_READ)
+                {
+                    printk(KERN_ERR
+                        "Driver only supports read operation for DMA target "
+                        "memory\n");
+                }
+                else
+                {
+                    file->f_op = &amc_pci_dma_fops;
+                    rc = amc_pci_dma_open(
+                        file, amc_priv->dma, dma_entry->base,
+                        dma_entry->length);
+                }
+                break;
+            }
             default:
                 printk(KERN_INFO "Unknown entry type found %02x\n",
                     pentry->tag);
@@ -228,11 +247,20 @@ static int create_device_nodes(
             {
                 TEST_OK(device_name, rc = -EINVAL, prom_error,
                     "No device description found in PROM");
-                struct prom_dma_entry *dma_entry =
-                    (struct prom_dma_entry *) pentry;
                 device_create(
                     device_class, &pdev->dev, MKDEV(major, minor + i), NULL,
-                    "%s.%d.%s", device_name, amc_priv->board, dma_entry->name);
+                    "%s.%d.%s", device_name, amc_priv->board,
+                    ((struct prom_dma_entry *) pentry)->name);
+                break;
+            }
+            case PROM_DMA_EXT_TAG:
+            {
+                TEST_OK(device_name, rc = -EINVAL, prom_error,
+                    "No device description found in PROM");
+                device_create(
+                    device_class, &pdev->dev, MKDEV(major, minor + i), NULL,
+                    "%s.%d.%s", device_name, amc_priv->board,
+                    ((struct prom_dma_ext_entry *) pentry)->name);
                 break;
             }
             default:
@@ -314,7 +342,7 @@ static int enable_board(struct pci_dev *pdev)
     rc = pci_request_regions(pdev, CLASS_NAME);
     TEST_RC(rc, no_regions, "Unable to reserve resources");
 
-    rc = dma_set_mask(&pdev->dev, DMA_BIT_MASK(64));
+    rc = dma_set_mask(&pdev->dev, DMA_BIT_MASK(48));
     TEST_RC(rc, no_dma_mask, "Unable to set DMA mask");
 
     pci_set_master(pdev);
@@ -519,6 +547,7 @@ static struct pci_driver amc_pci_driver = {
 
 static int __init amc_pci_init(void)
 {
+    static_assert(sizeof(size_t) == 8, "Only 64 bit architectures supported");
     printk(KERN_INFO "Loading AMC525 module\n");
     int rc = 0;
 
@@ -526,7 +555,11 @@ static int __init amc_pci_init(void)
     rc = alloc_chrdev_region(&device_major, 0, MAX_MINORS, CLASS_NAME);
     TEST_RC(rc, no_chrdev, "Unable to allocate dev region");
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 4, 0)
     device_class = class_create(THIS_MODULE, CLASS_NAME);
+#else
+    device_class = class_create(CLASS_NAME);
+#endif
     TEST_PTR(device_class, rc, no_class, "Unable to create class");
 
     rc = pci_register_driver(&amc_pci_driver);
