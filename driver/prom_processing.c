@@ -66,7 +66,7 @@ ssize_t read_prom(struct prom_context *context, char *buff, loff_t off,
         return -EIO;
     // offset and count should be multiple of 4 bytes
     loff_t off_al = off/4*4;
-    size_t size = MIN(PROM_MAX_LENGTH - off_al, count);
+    size_t size = min(PROM_MAX_LENGTH - (size_t) off_al, count);
     for (int i = 0; i < size; i += 4)
     {
         u32 rval = ioread32(context->base + off_al + i);

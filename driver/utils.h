@@ -1,8 +1,7 @@
 #ifndef UTILS_H
 #define UTILS_H
 #include <linux/types.h>
-
-#define MIN(a, b) ((a)<(b) ? (a):(b))
+#include <linux/minmax.h>
 
 u16 calc_checksum16(char *buff, size_t size);
 

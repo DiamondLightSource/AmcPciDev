@@ -94,7 +94,7 @@ static ssize_t prom_used_read(struct file *filp, struct kobject *kobj,
 {
     if (off > PROM_MAX_LENGTH)
         return -EINVAL;
-    size_t size = MIN(count, PROM_MAX_LENGTH - off);
+    size_t size = min(count, PROM_MAX_LENGTH - (size_t) off);
     struct pci_dev *pdev = to_pci_dev(kobj_to_dev(kobj));
     struct amc_pci *priv = pci_get_drvdata(pdev);
     memcpy(buff, priv->prom->buff + off, size);
@@ -555,7 +555,11 @@ static int __init amc_pci_init(void)
     rc = alloc_chrdev_region(&device_major, 0, MAX_MINORS, CLASS_NAME);
     TEST_RC(rc, no_chrdev, "Unable to allocate dev region");
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 4, 0)
     device_class = class_create(THIS_MODULE, CLASS_NAME);
+#else
+    device_class = class_create(CLASS_NAME);
+#endif
     TEST_PTR(device_class, rc, no_class, "Unable to create class");
 
     rc = pci_register_driver(&amc_pci_driver);
