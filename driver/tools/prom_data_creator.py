@@ -51,13 +51,13 @@ def dump_c(bin_data):
 
 
 def dump_memory_description(name, base, length, perm):
-    base_high = base >> 32
-    base_low = base & ((1 << 32) - 1)
-    if base_high > 0xffff:
+    if base > 0xffffffffffff or length > 0xffffffff:
         return struct.pack(
-            "<BBIIIB", DMA_EXT_TAG, len(name) + 14, base_low, base_high,
+            "<BBQQB", DMA_EXT_TAG, len(name) + 18, base,
                 length, perm) + name.encode() + b"\x00"
     else:
+        base_high = base >> 32
+        base_low = base & ((1 << 32) - 1)
         return struct.pack(
             "<BBIHIB", DMA_TAG, len(name) + 12, base_low, base_high,
                 length, perm) + name.encode() + b"\x00"

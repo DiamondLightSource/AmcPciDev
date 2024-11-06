@@ -54,7 +54,7 @@ struct __attribute__((packed)) prom_dma_entry {
 struct __attribute__((packed)) prom_dma_ext_entry {
     PROM_ENTRY_HEAD;
     u64 base;
-    u32 length;
+    u64 length;
     u8 perm;
     // assumed to be null terminated
     char name[];

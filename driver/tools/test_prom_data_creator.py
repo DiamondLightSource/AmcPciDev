@@ -51,10 +51,11 @@ def test_dump_memory_description():
     assert result == \
         b"\x02\x15\x14\x13\x12\x11\x10\x80\x94\x93\x92\x91\x06test_name\x00"
     result = dump_memory_description(
-        "test_name", 0x0807060504030201, 0x090a0b0c,
+        "test_name", 0x0706050403020100, 0x08090a0b0c0d0e0f,
         READ_PERM | WRITE_PERM)
     assert result == \
-        b"\x03\x17\x01\x02\x03\x04\x05\x06\x07\x08\x0c\x0b\x0a\x09\x06" \
+        b"\x03\x1b\x00\x01\x02\x03\x04\x05\x06\x07" \
+        b"\x0f\x0e\x0d\x0c\x0b\x0a\x09\x08\x06" \
         b"test_name\x00"
 
 

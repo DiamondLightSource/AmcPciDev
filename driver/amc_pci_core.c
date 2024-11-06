@@ -547,6 +547,7 @@ static struct pci_driver amc_pci_driver = {
 
 static int __init amc_pci_init(void)
 {
+    static_assert(sizeof(size_t) == 8, "Only 64 bit architectures supported");
     printk(KERN_INFO "Loading AMC525 module\n");
     int rc = 0;
 
