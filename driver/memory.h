@@ -1,3 +1,6 @@
+#ifndef MEMORY_H
+#define MEMORY_H
+
 /* Memory device support. */
 
 /* Initialises associated memory device.  The base and length of the controlled
@@ -7,3 +10,5 @@ int amc_pci_dma_open(
 
 /* File operations for memory devices. */
 extern struct file_operations amc_pci_dma_fops;
+
+#endif

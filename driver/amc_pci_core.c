@@ -97,7 +97,7 @@ static ssize_t prom_used_read(struct file *filp, struct kobject *kobj,
     size_t size = min(count, PROM_MAX_LENGTH - (size_t) off);
     struct pci_dev *pdev = to_pci_dev(kobj_to_dev(kobj));
     struct amc_pci *priv = pci_get_drvdata(pdev);
-    memcpy(buff, priv->prom->buff + off, size);
+    memcpy(buff, prom_get_buffer(priv->prom) + off, size);
     return size;
 }
 
@@ -154,7 +154,8 @@ static int amc_pci_open(struct inode *inode, struct file *file)
     int minor_index = iminor(inode) - amc_priv->minor;
 
     int rc = -EINVAL;
-    struct prom_entry *pentry = prom_find_entry(amc_priv->prom, minor_index);
+    union prom_entry *pentry = prom_find_entry_with_minor(
+        amc_priv->prom, minor_index);
 
     if (pentry)
     {
@@ -226,21 +227,24 @@ static int create_device_nodes(
 {
     int major = amc_priv->major;
     int minor = amc_priv->minor;
-
+    int rc = 0;
+    size_t nentries_with_minor = prom_get_nentries_with_minor(amc_priv->prom);
+    TEST_OK(nentries_with_minor > 0, rc=-EINVAL, no_cdev,
+        "Can't add devices with given PROM");
     cdev_init(&amc_priv->cdev, &base_fops);
     amc_priv->cdev.owner = THIS_MODULE;
-    int rc = cdev_add(&amc_priv->cdev, MKDEV(major, minor),
-        amc_priv->prom->nentries);
+    rc = cdev_add(
+        &amc_priv->cdev, MKDEV(major, minor), nentries_with_minor);
     TEST_RC(rc, no_cdev, "Unable to add device");
 
-    size_t i = 0;
+    size_t minor_off = 0;
     char *device_name = NULL;
-    struct prom_entry *pentry;
+    union prom_entry *pentry;
     prom_for_each_entry(pentry, amc_priv->prom)
     {
         switch (pentry->tag)
         {
-            // it is assumed that the device entry is the first found
+            /* it is assumed that the device entry is the first found */
             case PROM_DEVICE_TAG:
             {
                 struct prom_device_entry *device_entry =
@@ -249,8 +253,9 @@ static int create_device_nodes(
                     "Only one device entry is supported in PROM\n");
                 device_name = device_entry->name;
                 device_create(
-                    device_class, &pdev->dev, MKDEV(major, minor + i), NULL,
-                    "%s.%d.reg", device_name, amc_priv->board);
+                    device_class, &pdev->dev, MKDEV(major, minor + minor_off),
+                    NULL, "%s.%d.reg", device_name, amc_priv->board);
+                minor_off++;
                 break;
             }
             case PROM_DMA_TAG:
@@ -258,9 +263,10 @@ static int create_device_nodes(
                 TEST_OK(device_name, rc = -EINVAL, prom_error,
                     "No device description found in PROM");
                 device_create(
-                    device_class, &pdev->dev, MKDEV(major, minor + i), NULL,
-                    "%s.%d.%s", device_name, amc_priv->board,
-                    ((struct prom_dma_entry *) pentry)->name);
+                    device_class, &pdev->dev, MKDEV(major, minor + minor_off),
+                    NULL, "%s.%d.%s", device_name, amc_priv->board,
+                    pentry->dma.name);
+                minor_off++;
                 break;
             }
             case PROM_DMA_EXT_TAG:
@@ -268,26 +274,19 @@ static int create_device_nodes(
                 TEST_OK(device_name, rc = -EINVAL, prom_error,
                     "No device description found in PROM");
                 device_create(
-                    device_class, &pdev->dev, MKDEV(major, minor + i), NULL,
-                    "%s.%d.%s", device_name, amc_priv->board,
-                    ((struct prom_dma_ext_entry *) pentry)->name);
+                    device_class, &pdev->dev, MKDEV(major, minor + minor_off),
+                    NULL, "%s.%d.%s", device_name, amc_priv->board,
+                    pentry->dma_ext.name);
+                minor_off++;
                 break;
             }
             default:
-                printk(KERN_INFO "Unknown entry type found %02x\n",
-                    pentry->tag);
-                rc = -EINVAL;
-                goto bad_entry;
+                /* Only add devices */
+                break;
         }
-        i++;
     }
     return 0;
 
-bad_entry:
-    while (i--)
-    {
-        device_destroy(device_class, MKDEV(major, minor + i));
-    }
 prom_error:
     cdev_del(&amc_priv->cdev);
 no_cdev:
@@ -301,7 +300,7 @@ static void destroy_device_nodes(
     int major = amc_priv->major;
     int minor = amc_priv->minor;
 
-    for (int i = 0; i < amc_priv->prom->nentries; i ++)
+    for (int i = 0; i < prom_get_nentries(amc_priv->prom); i ++)
         device_destroy(device_class, MKDEV(major, minor + i));
     cdev_del(&amc_priv->cdev);
 }
@@ -352,9 +351,6 @@ static int enable_board(struct pci_dev *pdev)
     rc = pci_request_regions(pdev, CLASS_NAME);
     TEST_RC(rc, no_regions, "Unable to reserve resources");
 
-    rc = dma_set_mask(&pdev->dev, DMA_BIT_MASK(48));
-    TEST_RC(rc, no_dma_mask, "Unable to set DMA mask");
-
     pci_set_master(pdev);
 
     rc = pci_enable_msi(pdev);
@@ -365,7 +361,6 @@ static int enable_board(struct pci_dev *pdev)
     pci_disable_msi(pdev);
 no_msi:
     pci_clear_master(pdev);
-no_dma_mask:
     pci_release_regions(pdev);
 no_regions:
     pci_disable_device(pdev);
@@ -404,13 +399,22 @@ static int initialise_board(struct pci_dev *pdev, struct amc_pci *amc_priv)
 
     amc_priv->prom = prom_context;
 
-    TEST_OK(amc_priv->prom->nentries <= MAX_MINORS_PER_BOARD, rc = -E2BIG,
+    TEST_OK(
+        prom_get_nentries(amc_priv->prom) <= MAX_MINORS_PER_BOARD, rc = -E2BIG,
         no_minor, "Device requires more minors than maximum allowed");
 
-    if (amc_priv->prom->has_dma)
+    if (prom_get_dma_nentries(amc_priv->prom))
     {
+        union prom_entry *pentry = prom_find_entry_by_tag(
+            amc_priv->prom, PROM_DMA_MASK_TAG);
+        u8 mask = pentry ? pentry->dma_mask.mask : DMA_DEFAULT_MASK;
+        pentry = prom_find_entry_by_tag(
+            amc_priv->prom, PROM_DMA_ALIGN_TAG);
+        u8 alignment_shift =
+            pentry ? pentry->dma_align.shift : DMA_DEFAULT_ALIGNMENT_SHIFT;
         rc = initialise_dma_control(
-            pdev, amc_priv->ctrl_memory + CDMA_OFFSET, &amc_priv->dma);
+            pdev, amc_priv->ctrl_memory + CDMA_OFFSET, &amc_priv->dma,
+            mask, alignment_shift);
         if (rc < 0)  goto no_dma;
     }
 
@@ -423,7 +427,7 @@ static int initialise_board(struct pci_dev *pdev, struct amc_pci *amc_priv)
 
     terminate_interrupt_control(pdev, amc_priv->interrupts);
 no_irq:
-    if (amc_priv->prom->has_dma)
+    if (prom_get_dma_nentries(amc_priv->prom))
         terminate_dma_control(amc_priv->dma);
 no_minor:
     release_prom_context(prom_context);
@@ -439,7 +443,7 @@ static void terminate_board(struct pci_dev *pdev)
 {
     struct amc_pci *amc_priv = pci_get_drvdata(pdev);
     terminate_interrupt_control(pdev, amc_priv->interrupts);
-    if (amc_priv->prom->has_dma)
+    if (prom_get_dma_nentries(amc_priv->prom))
         terminate_dma_control(amc_priv->dma);
     release_prom_context(amc_priv->prom);
     pci_iounmap(pdev, amc_priv->ctrl_memory);
@@ -491,7 +495,6 @@ static int amc_pci_probe(
     if (rc < 0) goto sysfs_error;
 
     return 0;
-
 
     destroy_device_nodes(amc_priv, device_class);
 sysfs_error:

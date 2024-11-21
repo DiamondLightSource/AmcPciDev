@@ -7,6 +7,7 @@
 
 #include "error.h"
 #include "debug.h"
+#include "utils.h"
 
 #include "dma_control.h"
 
@@ -17,13 +18,9 @@ static int dma_block_shift = DMA_BLOCK_SHIFT;
 module_param(dma_block_shift, int, S_IRUGO);
 
 
-/* All DMA transfers must occur on a 32-byte alignment, I guess this is the
- * 256-bit transfer size.  Alas, if this rule is violated then the DMA engine
- * simply locks up without reporting an error. */
-#define DMA_ALIGNMENT       32
 /* The DMA transfer count is limited to 23 bits, so the maximum transfer size is
  * 2^23-1 = 8388607 bytes, and we align the limit. */
-#define MAX_DMA_TRANSFER    (((1 << 23) - 1) & ~(DMA_ALIGNMENT - 1))
+#define MAX_DMA_TRANSFER    ((1 << 23) - 1)
 
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
@@ -77,6 +74,9 @@ struct dma_control {
 
     /* Completion for DMA transfer. */
     struct completion dma_done;
+
+    ssize_t alignment;
+    ssize_t max_transfer;
 };
 
 
@@ -138,7 +138,6 @@ static int maybe_reset_dma(struct dma_control *dma)
             status);
         rc = reset_dma_controller(dma);
     }
-    reinit_completion(&dma->dma_done);
     return rc;
 }
 
@@ -152,48 +151,56 @@ void dma_interrupt(struct dma_control *dma)
 }
 
 
-ssize_t read_dma_memory(
-    struct dma_control *dma, size_t start, size_t count, void **buffer)
+static int configure_dma_engine(
+    struct dma_control *dma, size_t src, size_t dst, size_t count)
 {
-    ssize_t rc;
-    /* Adjust the dma start and byte count to be multiples of the alignment so
-     * that we don't upset the DMA engine. */
-    size_t align_mask_low = DMA_ALIGNMENT - 1;
-    size_t align_mask_high = ~align_mask_low;
-    size_t dma_start = start & align_mask_high;
-    size_t start_offset = start & align_mask_low;
-    /* For the count we have to add in the starting offset we've missed and
-     * ensure that the entire transfer is rounded up. */
-    size_t dma_count =
-        (start_offset + count + align_mask_low) & align_mask_high;
-
-    /* Ensure we only try to read as much as will fit in our buffer. */
-    size_t max_count = dma->buffer_size < MAX_DMA_TRANSFER ?
-        dma->buffer_size : MAX_DMA_TRANSFER;
-    if (dma_count > max_count)
-    {
-        dma_count = max_count;
-        count = dma_count - start_offset;
-    }
-
-    mutex_lock(&dma->mutex);
-    *buffer = dma->buffer + start_offset;
-
-    /* Hand the buffer over to the DMA engine. */
-    dma_sync_single_for_device(
-        &dma->pdev->dev, dma->buffer_dma, dma->buffer_size,  DMA_FROM_DEVICE);
-
+    dev_dbg(&dma->pdev->dev,
+        "Requesting DMA transfer 0x%08zx -> 0x%08zx, 0x%08zx bytes\n",
+        src, dst, count);
+    ssize_t alignment = dma_get_alignment(dma);
+    int rc = IS_ALIGNED(src, alignment) &&
+             IS_ALIGNED(dst, alignment) &&
+             IS_ALIGNED(count, alignment) ? 0 : -EINVAL;
+    TEST_RC(rc, unaligned_error, "DMA operation not aligned");
     /* Reset the DMA engine if necessary. */
     rc = (ssize_t) maybe_reset_dma(dma);
     TEST_RC(rc, reset_error, "Failed to reset DMA");
 
     /* Configure the engine for transfer. */
-    writel((uint32_t) (start >> 32), &dma->regs->sa_msb);
-    writel((uint32_t) dma_start, &dma->regs->sa);
-    writel((uint32_t) dma->buffer_dma, &dma->regs->da);
-    writel((uint32_t) (dma->buffer_dma >> 32), &dma->regs->da_msb);
+    writel((uint32_t) (src >> 32), &dma->regs->sa_msb);
+    writel((uint32_t) src, &dma->regs->sa);
+    writel((uint32_t) dst, &dma->regs->da);
+    writel((uint32_t) (dst >> 32), &dma->regs->da_msb);
     /* Ensure we don't request an under sized buffer. */
-    writel(dma_count, &dma->regs->btt);
+    writel(count, &dma->regs->btt);
+reset_error:
+unaligned_error:
+    return rc;
+}
+
+
+/* Caller must have dma memory locked. */
+ssize_t dma_operation_unlocked(
+    struct dma_control *dma, size_t start, size_t count,
+    enum dma_data_direction dir)
+{
+    if (count > dma->max_transfer)
+        count = dma->max_transfer;
+
+    /* Hand the buffer over to the DMA engine. */
+    dma_sync_single_for_device(
+        &dma->pdev->dev, dma->buffer_dma, dma->buffer_size, dir);
+
+    reinit_completion(&dma->dma_done);
+    ssize_t rc;
+    if (dir == DMA_TO_DEVICE)
+        rc = configure_dma_engine(dma, dma->buffer_dma, start, count);
+    else if (dir == DMA_FROM_DEVICE)
+        rc = configure_dma_engine(dma, start, dma->buffer_dma, count);
+    else
+        rc = -EINVAL;
+
+    TEST_RC(rc, dma_error, "Failed to configure DMA");
 
     /* Wait for transfer to complete.  If we're killed, unlock and bail.  Note
      * that this call is only killable (kill -9) and not interruptible because
@@ -206,7 +213,7 @@ ssize_t read_dma_memory(
     /* Restore the buffer to CPU access (really just flushes associated cache
      * entries). */
     dma_sync_single_for_cpu(
-        &dma->pdev->dev, dma->buffer_dma, dma->buffer_size,  DMA_FROM_DEVICE);
+        &dma->pdev->dev, dma->buffer_dma, dma->buffer_size, dir);
 
     rc = check_dma_status(dma);
     if (rc)
@@ -216,15 +223,25 @@ ssize_t read_dma_memory(
 
 dma_error:
 killed:
-reset_error:
-    mutex_unlock(&dma->mutex);
     return rc;
 }
 
 
-void release_dma_memory(struct dma_control *dma)
+void dma_memory_lock(struct dma_control *dma)
+{
+    mutex_lock(&dma->mutex);
+}
+
+
+void dma_memory_unlock(struct dma_control *dma)
 {
     mutex_unlock(&dma->mutex);
+}
+
+
+void *dma_get_buffer(struct dma_control *dma)
+{
+    return dma->buffer;
 }
 
 
@@ -234,16 +251,29 @@ size_t dma_buffer_size(struct dma_control *dma)
 }
 
 
+size_t dma_get_alignment(struct dma_control *dma)
+{
+    return dma->alignment;
+}
+
+
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 /* Initialisation and shutdown. */
 
 
 int initialise_dma_control(
-    struct pci_dev *pdev, void __iomem *regs, struct dma_control **pdma)
+    struct pci_dev *pdev, void __iomem *regs, struct dma_control **pdma,
+    u8 dma_mask, u8 dma_alignment_shift)
 {
+    dev_dbg(&pdev->dev,
+        "Initialising DMA control with mask %d and alignment %llu\n",
+        dma_mask, 1ull << dma_alignment_shift);
     int rc = 0;
     TEST_OK(dma_block_shift >= PAGE_SHIFT, rc = -EINVAL, no_memory,
         "Invalid DMA buffer size");
+
+    rc = dma_set_mask(&pdev->dev, DMA_BIT_MASK(dma_mask));
+    TEST_RC(rc, no_dma_mask, "Unable to set DMA mask");
 
     /* Create and return DMA control structure. */
     struct dma_control *dma = kmalloc(sizeof(struct dma_control), GFP_KERNEL);
@@ -258,10 +288,14 @@ int initialise_dma_control(
     dma->buffer = (void *) __get_free_pages(
         GFP_KERNEL, dma->buffer_shift - PAGE_SHIFT);
     TEST_PTR(dma->buffer, rc, no_buffer, "Unable to allocate DMA buffer");
+    dma->alignment = 1ull << dma_alignment_shift;
+    dma->max_transfer =
+        ALIGN_DOWN(min((size_t) MAX_DMA_TRANSFER, dma->buffer_size),
+            dma->alignment);
 
     /* Get the associated DMA address for the buffer. */
     dma->buffer_dma = dma_map_single(
-        &pdev->dev, dma->buffer, dma->buffer_size, DMA_FROM_DEVICE);
+        &pdev->dev, dma->buffer, dma->buffer_size, DMA_BIDIRECTIONAL);
     TEST_OK(!dma_mapping_error(&pdev->dev, dma->buffer_dma),
         rc = -EIO, no_dma_map, "Unable to map DMA buffer");
 
@@ -276,11 +310,12 @@ int initialise_dma_control(
 
 reset_error:
     dma_unmap_single(
-        &pdev->dev, dma->buffer_dma, dma->buffer_size, DMA_FROM_DEVICE);
+        &pdev->dev, dma->buffer_dma, dma->buffer_size, DMA_BIDIRECTIONAL);
 no_dma_map:
     free_pages((unsigned long) dma->buffer, dma->buffer_shift - PAGE_SHIFT);
 no_buffer:
     kfree(dma);
+no_dma_mask:
 no_memory:
     return rc;
 }
