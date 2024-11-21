@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+
 from __future__ import print_function
 
 import argparse
@@ -11,6 +12,10 @@ DEFAULT_VERSION = 1
 MAGIC_STRING = "DIAG"
 DEVICE_TAG = 1
 DMA_TAG = 2
+DMA_EXT_TAG = 3
+DMA_MASK_TAG = 4
+DMA_ALIGNMENT_TAG = 5
+
 READ_PERM = 4
 WRITE_PERM = 2
 
@@ -47,13 +52,17 @@ def dump_c(bin_data):
     return "{\n  " + "\n  ".join(hex_lines) + "\n};\n"
 
 
-def dump_memory_description(tag, name, base, length, perm):
-    base_high = base >> 32
-    base_low = base & ((1 << 32) - 1)
-    payload_length = len(name) + 12
-    return struct.pack(
-        "<BBIHIB", tag, payload_length, base_low, base_high, length, perm) \
-        + name.encode() + b"\x00"
+def dump_memory_description(name, base, length, perm):
+    if base > 0xffffffffffff or length > 0xffffffff:
+        return struct.pack(
+            "<BBQQB", DMA_EXT_TAG, len(name) + 18, base,
+                length, perm) + name.encode() + b"\x00"
+    else:
+        base_high = base >> 32
+        base_low = base & ((1 << 32) - 1)
+        return struct.pack(
+            "<BBIHIB", DMA_TAG, len(name) + 12, base_low, base_high,
+                length, perm) + name.encode() + b"\x00"
 
 
 def dump_header(version=None):
@@ -63,6 +72,14 @@ def dump_header(version=None):
 def dump_device_description(name):
     return struct.pack("BB", DEVICE_TAG, len(name) + 1) + name.encode() \
         + b"\x00"
+
+
+def dump_dma_mask(mask):
+    return struct.pack("BBB", DMA_MASK_TAG, 1, mask)
+
+
+def dump_dma_alignment_shift(shift):
+    return struct.pack("BBB", DMA_ALIGNMENT_TAG, 1, shift)
 
 
 def check_checksum(prom_data):
@@ -123,12 +140,17 @@ def process_config_file(path):
                 bin_data.extend(dump_header(int(value)))
             elif field == "name":
                 bin_data.extend(dump_device_description(value))
-            elif field == "dma":
+            elif field == "dma" or field == "region":
                 name, perm, base, length = value.split()
                 bin_data.extend(
                     dump_memory_description(
-                        DMA_TAG, name,
-                        int_hex(base), int_hex(length), perm_flag(perm)))
+                        name, int_hex(base), int_hex(length), perm_flag(perm)))
+            elif field == "mask":
+                bin_data.extend(dump_dma_mask(int(value)))
+            elif field == "align_shift":
+                bin_data.extend(dump_dma_alignment_shift(int(value)))
+            else:
+                raise ValueError("Unknown field: {}".format(field))
 
     bin_data.extend(dump_end(bytes(bin_data)))
     return bin_data

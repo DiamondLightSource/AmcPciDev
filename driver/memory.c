@@ -58,11 +58,52 @@ static int amc_pci_dma_release(struct inode *inode, struct file *file)
 }
 
 
+static ssize_t amc_pci_dma_write(
+    struct file *file, const char __user *buf, size_t count, loff_t *f_pos)
+{
+    ssize_t rc = 0;
+    struct memory_context *context = file->private_data;
+    /* Constrain write to valid region. */
+    loff_t offset = *f_pos;
+    if (offset == context->length)
+        return 0;
+    else if (offset > context->length)
+        /* Treat seeks off end of memory block as an error. */
+        return -EFAULT;
+    if (count > context->length - offset ||
+            count > dma_buffer_size(context->dma))
+        /* Can't write more than the remaining memory or DMA buffer. */
+        return -EINVAL;
+
+
+    void *data_buffer = dma_get_buffer(context->dma);
+    ssize_t write_count = count;
+    /* Lock, transfer from user space, write data, unlock. */
+    dma_memory_lock(context->dma);
+    write_count -= copy_from_user(data_buffer, buf, count);
+    TEST_OK(write_count > 0, rc = -EFAULT, mem_err, "Failed to copy data");
+    /* Misaligned writes will fail in the following function call */
+    ssize_t dma_write_count = dma_operation_unlocked(
+        context->dma, context->base + offset, count, DMA_TO_DEVICE);
+    TEST_OK(dma_write_count > 0, rc = dma_write_count, mem_err, "DMA failed");
+    dma_memory_unlock(context->dma);
+
+    *f_pos += dma_write_count;
+    if (*f_pos >= context->length)
+        *f_pos = 0;
+
+    return dma_write_count;
+mem_err:
+    dma_memory_unlock(context->dma);
+    return rc;
+}
+
+
 static ssize_t amc_pci_dma_read(
     struct file *file, char __user *buf, size_t count, loff_t *f_pos)
 {
+    ssize_t rc = 0;
     struct memory_context *context = file->private_data;
-
     /* Constrain read to valid region. */
     loff_t offset = *f_pos;
     if (offset == context->length)
@@ -71,28 +112,35 @@ static ssize_t amc_pci_dma_read(
         /* Treat seeks off end of memory block as an error. */
         return -EFAULT;
 
-    /* Clip read to end of memory. */
-    if (count > context->length - offset)
-        count = context->length - offset;
-
-    /* Read the data, transfer it to user space, release. */
-    void *read_data;
-    ssize_t read_count = read_dma_memory(
-        context->dma, context->base + offset, count, &read_data);
-    if (read_count < 0)
-        return read_count;
-
-    read_count -= copy_to_user(buf, read_data, read_count);
-    release_dma_memory(context->dma);
-
-    *f_pos += read_count;
-    if (*f_pos == context->length)
-        *f_pos = 0;
-    if (read_count == 0)
-        /* Looks like copy_to_user didn't copy anything. */
+    void *data_buffer = dma_get_buffer(context->dma);
+    size_t alignment = dma_get_alignment(context->dma);
+    size_t in_offset = offset & (alignment - 1);
+    size_t dma_addr = context->base + offset - in_offset;
+    size_t dma_count = ALIGN(count + in_offset, alignment);
+    if (dma_addr + dma_count > context->base + context->length)
+        dma_count = ALIGN_DOWN(
+            context->base + context->length - dma_addr, alignment);
+    if (dma_count == 0)
+        /* Can't read anything without violating alignment. */
         return -EFAULT;
-    else
-        return read_count;
+
+    /* Lock, read the data, transfer it to user space, unlock. */
+    dma_memory_lock(context->dma);
+    ssize_t dma_read_count = dma_operation_unlocked(
+        context->dma, dma_addr, dma_count, DMA_FROM_DEVICE);
+    TEST_OK(dma_read_count > 0, rc = dma_read_count, mem_err, "DMA failed");
+    ssize_t user_count = min(count, dma_read_count - in_offset);
+    user_count -= copy_to_user(buf, data_buffer + in_offset, user_count);
+    TEST_OK(user_count > 0, rc = -EFAULT, mem_err, "Failed to copy data");
+    dma_memory_unlock(context->dma);
+    *f_pos += user_count;
+    if (*f_pos >= context->length)
+        *f_pos = 0;
+
+    return user_count;
+mem_err:
+    dma_memory_unlock(context->dma);
+    return rc;
 }
 
 
@@ -123,6 +171,7 @@ static long amc_pci_mem_ioctl(
 struct file_operations amc_pci_dma_fops = {
     .owner = THIS_MODULE,
     .release = amc_pci_dma_release,
+    .write = amc_pci_dma_write,
     .read = amc_pci_dma_read,
     .llseek = amc_pci_dma_llseek,
     .unlocked_ioctl = amc_pci_mem_ioctl,
