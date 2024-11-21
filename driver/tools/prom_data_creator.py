@@ -13,6 +13,8 @@ MAGIC_STRING = "DIAG"
 DEVICE_TAG = 1
 DMA_TAG = 2
 DMA_EXT_TAG = 3
+DMA_MASK_TAG = 4
+DMA_ALIGNMENT_TAG = 5
 
 READ_PERM = 4
 WRITE_PERM = 2
@@ -70,6 +72,14 @@ def dump_header(version=None):
 def dump_device_description(name):
     return struct.pack("BB", DEVICE_TAG, len(name) + 1) + name.encode() \
         + b"\x00"
+
+
+def dump_dma_mask(mask):
+    return struct.pack("BBB", DMA_MASK_TAG, 1, mask)
+
+
+def dump_dma_alignment_shift(shift):
+    return struct.pack("BBB", DMA_ALIGNMENT_TAG, 1, shift)
 
 
 def check_checksum(prom_data):
@@ -135,6 +145,12 @@ def process_config_file(path):
                 bin_data.extend(
                     dump_memory_description(
                         name, int_hex(base), int_hex(length), perm_flag(perm)))
+            elif field == "mask":
+                bin_data.extend(dump_dma_mask(int(value)))
+            elif field == "align_shift":
+                bin_data.extend(dump_dma_alignment_shift(int(value)))
+            else:
+                raise ValueError("Unknown field: {}".format(field))
 
     bin_data.extend(dump_end(bytes(bin_data)))
     return bin_data

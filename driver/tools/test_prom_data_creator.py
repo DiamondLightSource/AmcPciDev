@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 import logging
 from prom_data_creator import check_checksum, dump_coe, dump_header, \
-    dump_device_description, dump_memory_description
+    dump_device_description, dump_memory_description, dump_dma_mask, \
+    dump_dma_alignment_shift
 
 from prom_data_creator import DMA_TAG, READ_PERM, WRITE_PERM
 log = logging.getLogger(__name__)
@@ -57,6 +58,14 @@ def test_dump_memory_description():
         b"\x03\x1b\x00\x01\x02\x03\x04\x05\x06\x07" \
         b"\x0f\x0e\x0d\x0c\x0b\x0a\x09\x08\x06" \
         b"test_name\x00"
+
+
+def test_dump_dma_mask():
+    assert dump_dma_mask(0x42) == b"\x04\x01\x42"
+
+
+def test_dump_dma_alignment():
+    assert dump_dma_alignment_shift(0x6) == b"\x05\x01\x06"
 
 
 def test_check_checksum():

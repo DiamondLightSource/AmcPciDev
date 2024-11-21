@@ -5,11 +5,57 @@
 #include "default_prom.c"
 
 #define PROM_VERSION            1
-#define PROM_NAME_MAX_LENGTH    256
 #define PROM_FIRST_ENTRY_OFFSET 5
 #define PROM_VERSION_OFFSET     4
 #define PROM_CHECKSUM_SIZE      2
 
+
+struct prom_context {
+    void __iomem *base;
+    u8 buff[PROM_MAX_LENGTH + 1];
+    size_t data_len;
+    size_t nentries;
+    size_t dma_nentries;
+    size_t nentries_with_minor;
+};
+
+
+u8 *prom_get_buffer(struct prom_context *context)
+{
+    return context->buff;
+}
+
+
+size_t prom_get_length(struct prom_context *context)
+{
+    return context->data_len;
+}
+
+
+size_t prom_get_nentries(struct prom_context *context)
+{
+    return context->nentries;
+}
+
+
+size_t prom_get_dma_nentries(struct prom_context *context)
+{
+    return context->dma_nentries;
+}
+
+
+size_t prom_get_nentries_with_minor(struct prom_context *context)
+{
+    return context->nentries_with_minor;
+}
+
+
+bool prom_entry_needs_minor(union prom_entry *entry)
+{
+    return entry->tag == PROM_DEVICE_TAG ||
+        entry->tag == PROM_DMA_TAG ||
+        entry->tag == PROM_DMA_EXT_TAG;
+}
 
 
 static int validate_prom(struct prom_context *context)
@@ -18,29 +64,59 @@ static int validate_prom(struct prom_context *context)
 }
 
 
-struct prom_entry *prom_first_entry(struct prom_context *context)
+union prom_entry *prom_first_entry(struct prom_context *context)
 {
-    return (struct prom_entry *) &context->buff[PROM_FIRST_ENTRY_OFFSET];
+    return (union prom_entry *) &context->buff[PROM_FIRST_ENTRY_OFFSET];
 }
 
 
-struct prom_entry *prom_next_entry(struct prom_entry *entry)
+union prom_entry *prom_next_entry(union prom_entry *entry)
 {
     if (entry->tag == PROM_END_TAG)
         return entry;
-    return (struct prom_entry *) (((char *) entry) + entry->size + 2);
+    return (union prom_entry *) (((char *) entry) + entry->size + 2);
 }
 
 
-struct prom_entry *prom_find_entry(struct prom_context *context, int index)
+union prom_entry *prom_find_entry(struct prom_context *context, int index)
 {
     int i = 0;
-    struct prom_entry *pentry;
+    union prom_entry *pentry;
     prom_for_each_entry(pentry, context)
     {
         if (i == index)
             return pentry;
         i++;
+    }
+    return NULL;
+}
+
+
+union prom_entry *prom_find_entry_with_minor(
+    struct prom_context *context, int minor)
+{
+    int i = 0;
+    union prom_entry *pentry;
+    prom_for_each_entry(pentry, context)
+    {
+        if (prom_entry_needs_minor(pentry))
+        {
+            if (i == minor)
+                return pentry;
+            i++;
+        }
+    }
+    return NULL;
+}
+
+
+union prom_entry *prom_find_entry_by_tag(struct prom_context *context, u8 tag)
+{
+    union prom_entry *pentry;
+    prom_for_each_entry(pentry, context)
+    {
+        if (pentry->tag == tag)
+            return pentry;
     }
     return NULL;
 }
@@ -105,8 +181,13 @@ struct prom_context *load_prom(void __iomem *base)
     int ent_i = PROM_FIRST_ENTRY_OFFSET;
     while (ent_i < PROM_MAX_LENGTH && context->buff[ent_i] != PROM_END_TAG)
     {
-        if (context->buff[ent_i] == PROM_DMA_TAG)
-            context->has_dma = true;
+        union prom_entry *entry = (union prom_entry *) &context->buff[ent_i];
+        if (entry->tag == PROM_DMA_TAG ||
+                entry->tag == PROM_DMA_EXT_TAG)
+            context->dma_nentries++;
+
+        if (prom_entry_needs_minor(entry))
+            context->nentries_with_minor++;
 
         ent_i += context->buff[ent_i + 1] + 2;
         context->nentries++;
@@ -114,8 +195,8 @@ struct prom_context *load_prom(void __iomem *base)
 
     context->data_len = ent_i + context->buff[ent_i + 1] + 2;
 
-    // At this point we've either run off the end of memory, or we're sitting
-    // on a putative end marker
+    /* At this point we've either run off the end of memory, or we're sitting
+     * on a putative end marker */
     TEST_OK(
         context->data_len < PROM_MAX_LENGTH &&
         context->buff[ent_i] == PROM_END_TAG &&
