@@ -125,6 +125,19 @@ void amc_pci_release(struct inode *inode)
 }
 
 
+static bool validate_file_permission(
+    struct file *file, bool can_read, bool can_write)
+{
+    if (can_read && (file->f_flags & O_ACCMODE) == O_RDONLY)
+        return true;
+    if (can_write && (file->f_flags & O_ACCMODE) == O_WRONLY)
+        return true;
+    if (can_read && can_write && (file->f_flags & O_ACCMODE) == O_RDWR)
+        return true;
+    return false;
+}
+
+
 static int amc_pci_open(struct inode *inode, struct file *file)
 {
     /* Recover our private data: the i_cdev lives inside our private structure,
@@ -157,11 +170,11 @@ static int amc_pci_open(struct inode *inode, struct file *file)
             {
                 struct prom_dma_entry *dma_entry =
                     (struct prom_dma_entry *) pentry;
-                if (dma_entry->perm != PROM_DMA_PERM_READ)
+                if (!validate_file_permission(
+                        file, PROM_PERM_CAN_READ(dma_entry->perm),
+                        PROM_PERM_CAN_WRITE(dma_entry->perm)))
                 {
-                    printk(KERN_ERR
-                        "Driver only supports read operation for DMA target "
-                        "memory\n");
+                    rc = -EACCES;
                 }
                 else
                 {
@@ -178,11 +191,11 @@ static int amc_pci_open(struct inode *inode, struct file *file)
             {
                 struct prom_dma_ext_entry *dma_entry =
                     (struct prom_dma_ext_entry *) pentry;
-                if (dma_entry->perm != PROM_DMA_PERM_READ)
+                if (!validate_file_permission(
+                        file, PROM_PERM_CAN_READ(dma_entry->perm),
+                        PROM_PERM_CAN_WRITE(dma_entry->perm)))
                 {
-                    printk(KERN_ERR
-                        "Driver only supports read operation for DMA target "
-                        "memory\n");
+                    rc = -EACCES;
                 }
                 else
                 {
@@ -193,9 +206,6 @@ static int amc_pci_open(struct inode *inode, struct file *file)
                 }
                 break;
             }
-            default:
-                printk(KERN_INFO "Unknown entry type found %02x\n",
-                    pentry->tag);
         }
     }
 

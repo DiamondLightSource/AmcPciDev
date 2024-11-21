@@ -12,6 +12,8 @@
 #define PROM_DMA_PERM_READ      4
 
 #define PROM_MAX_LENGTH 4096
+#define PROM_PERM_CAN_WRITE(perm) ((perm) & PROM_DMA_PERM_WRITE)
+#define PROM_PERM_CAN_READ(perm) ((perm) & PROM_DMA_PERM_READ)
 
 #define prom_for_each_entry(pos, context) \
     for (pos = prom_first_entry(context); \
