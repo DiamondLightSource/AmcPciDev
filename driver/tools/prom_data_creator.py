@@ -140,7 +140,7 @@ def process_config_file(path):
                 bin_data.extend(dump_header(int(value)))
             elif field == "name":
                 bin_data.extend(dump_device_description(value))
-            elif field == "dma":
+            elif field == "dma" or field == "region":
                 name, perm, base, length = value.split()
                 bin_data.extend(
                     dump_memory_description(
